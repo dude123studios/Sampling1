@@ -14,8 +14,6 @@ target_models:
     model_name: "qwen/qwen3-8b"
   - name: "deepseek-qwen3-8b"
     model_name: "deepseek/deepseek-r1-0528-qwen3-8b"
-  - name: "qwq-32b"
-    model_name: "qwen/qwq-32b-preview"
 
 # Sampling parameters
 temperature: 0.6

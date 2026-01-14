@@ -1,9 +1,11 @@
 """
 Self-Correct Prefix Experiment Runner
 
-This experiment finds problems where a model achieves pass@k with exactly 1-2 correct attempts,
-then tests whether providing prefixes of the correct attempt helps the model solve more consistently.
-The hypothesis is that grounding the first few tokens matters most.
+Tests if providing prefixes of a model's own correct attempts helps it solve problems more consistently.
+This experiment:
+1.  Identifies problems where the model got exactly 1-2 correct attempts out of 10.
+2.  Extracts the prefix from one of those correct attempts.
+3.  Evaluates pass@1 with that prefix.
 
 Usage:
     python scripts/run_self_correct_prefix_experiment.py --config configs/self_correct_prefix_experiment.yaml
@@ -18,6 +20,7 @@ from datetime import datetime
 from tqdm import tqdm
 import logging
 import yaml
+import random
 from transformers import AutoTokenizer
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -25,11 +28,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from src.models.api_model import APIModel
-from src.data.loader import load_task_data
-from src.data.prompts import MATH_PROMPT, get_prompt
+from src.data.prompts import MATH_PROMPT
 from src.evaluation.math_grader import grade_math
-from src.sampling.engine import run_sampling
-from src.utils.logging import ExperimentLogger
 from dotenv import load_dotenv
 from omegaconf import DictConfig
 
@@ -38,237 +38,227 @@ log = logging.getLogger(__name__)
 
 class SelfCorrectPrefixExperiment:
     def __init__(self, config_path):
-        """Initialize the experiment with config."""
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
-
-        # Initialize tokenizer for counting tokens
+            
         log.info("Loading tokenizer...")
-        self.tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
-
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
+        except Exception:
+            self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+            
         load_dotenv()
 
     def get_token_prefix(self, text, num_tokens):
-        """Get the first num_tokens tokens from text."""
         if num_tokens == 0:
             return ""
-
         tokens = self.tokenizer.encode(text, add_special_tokens=False)
         prefix_tokens = tokens[:num_tokens]
-        prefix_text = self.tokenizer.decode(prefix_tokens, skip_special_tokens=True)
-        return prefix_text
+        return self.tokenizer.decode(prefix_tokens, skip_special_tokens=True)
 
-    def process_self_correct_problem(self, problem, prefix_length, model, temperature, max_new_tokens, top_p, num_samples):
-        """Process a single problem with a given prefix length."""
+    def find_baseline_logs(self):
+        """Find appropriate baseline logs or None."""
+        if self.config.get('source_results'):
+            return self.config['source_results']
+            
+        # Try to find recent matching sweep results
+        sweeps_dir = Path("results/sweeps")
+        # Look for baseline sweep or temperature sweep folders
+        # This is a heuristic. 
+        # Ideally, we should generate them if not specified, which is handled in run_experiment.
+        return None
+
+    def process_problem(self, item, prefix_length, model, temperature, max_new_tokens, top_p):
+        """Process a single problem with a given prefix."""
         try:
-            # Use the first correct output as the prefix source
-            correct_output = problem['correct_outputs'][0]
-            prefix = self.get_token_prefix(correct_output, prefix_length)
+            prefix = self.get_token_prefix(item['correct_solution_text'], prefix_length)
+            
+            # Use original problem text if available, or reconstruct prompt?
+            # The 'item' here comes from our filtered list.
+            # Ideally we have the original 'problem' text.
+            
+            if 'original_item' in item:
+                # Reconstruct prompt
+                problem_text = item['original_item'].get('problem') or item['original_item'].get('question')
+                base_prompt = MATH_PROMPT.format(problem=problem_text)
+            elif 'prompt' in item:
+                 base_prompt = item['prompt'] # Might contain the prompt
+            else:
+                 # Fallback: assume the 'prompt' field in log.jsonl is the full prompt
+                 # But log.jsonl usually keys: id, outputs, scores, gold, metrics, dataset_id...
+                 # It doesn't always have the full prompt text unless logged.
+                 # We might need to reload the dataset to get the prompt.
+                 # Let's hope the filtered item contains 'problem'
+                 return {'error': 'Missing problem text'}
 
-            # Create prompt with prefix
-            problem_text = problem['problem']
-            base_prompt = MATH_PROMPT.format(problem=problem_text)
+            output_continuation = model.generate(
+                base_prompt,
+                temperature=temperature,
+                max_new_tokens=max_new_tokens,
+                top_p=top_p,
+                prefix=prefix if prefix_length > 0 else None
+            )
 
-            # Generate multiple samples
-            outputs = []
-            scores = []
+            # Reconstruct full output
+            if prefix_length > 0:
+                output = prefix + output_continuation
+            else:
+                output = output_continuation
 
-            for _ in range(num_samples):
-                output_continuation = model.generate(
-                    base_prompt,
-                    temperature=temperature,
-                    max_new_tokens=max_new_tokens,
-                    top_p=top_p,
-                    prefix=prefix if prefix_length > 0 else None
-                )
-
-                # Reconstruct full output
-                if prefix_length > 0:
-                    output = prefix + output_continuation
-                else:
-                    output = output_continuation
-                
-                outputs.append(output)
-
-                # Grade
-                gold_answer = problem['gold']
-                is_correct = grade_math(output, gold_answer)
-                scores.append(1 if is_correct else 0)
+            is_correct = grade_math(output, item['gold'])
 
             return {
-                'id': problem['id'],
-                'dataset_id': problem['dataset_id'],
+                'id': item['id'],
                 'prefix_length': prefix_length,
-                'prefix_text': prefix,
-                'outputs': outputs,
-                'scores': scores,
-                'num_correct': sum(scores)
+                'output': output,
+                'is_correct': is_correct
             }
-
         except Exception as e:
-            log.error(f"Error processing problem {problem['id']}: {e}")
-            return {
-                'id': problem['id'],
-                'dataset_id': problem['dataset_id'],
-                'prefix_length': prefix_length,
-                'error': str(e)
-            }
+            return {'id': item['id'], 'error': str(e)}
 
-    def load_or_generate_baseline(self):
-        """Load existing results or generate new baseline data."""
-        source_results = self.config.get('source_results')
+    def run_experiment(self, max_workers=40):
+        # 1. Load or Generate Baseline Data
+        source_file = self.find_baseline_logs()
+        
+        candidates = []
+        
+        if source_file and os.path.exists(source_file):
+            log.info(f"Loading baseline from {source_file}")
+            with open(source_file, 'r') as f:
+                for line in f:
+                    try:
+                        entry = json.loads(line)
+                        if 'scores' in entry:
+                            correct_count = sum(entry['scores'])
+                            min_c = self.config['filter_criteria']['min_correct']
+                            max_c = self.config['filter_criteria']['max_correct']
+                            
+                            if min_c <= correct_count <= max_c:
+                                # Found a candidate!
+                                correct_indices = [i for i, s in enumerate(entry['scores']) if s > 0]
+                                if correct_indices:
+                                    idx = correct_indices[0] # Pick first correct solution
+                                    candidate = {
+                                        'id': entry['id'],
+                                        'dataset_id': entry.get('dataset_id'),
+                                        'gold': entry['gold'],
+                                        'correct_solution_text': entry['outputs'][idx],
+                                        'baseline_accuracy': correct_count / len(entry['scores'])
+                                    }
+                                    candidates.append(candidate)
+                    except Exception as e:
+                        pass
+        else:
+            # Fallback: Is there a default generation?
+            # For now, let's try to search deeper or ask user.
+            # But let's check one more common location if source_file was None
+            sweeps_base = Path("results/sweeps")
+            if sweeps_base.exists():
+                # Find most recent log.jsonl in any subdir
+                all_logs = sorted(sweeps_base.glob("**/log.jsonl"), key=lambda x: x.stat().st_mtime, reverse=True)
+                if all_logs:
+                    log.info(f"Auto-detected recent sweep log: {all_logs[0]}")
+                    source_file = all_logs[0]
+                    # Recursive call or copy-paste logic? Copy-paste for simplicity now.
+                    with open(source_file, 'r') as f:
+                        for line in f:
+                            try:
+                                entry = json.loads(line)
+                                if 'scores' in entry:
+                                    correct_count = sum(entry['scores'])
+                                    min_c = self.config['filter_criteria']['min_correct']
+                                    max_c = self.config['filter_criteria']['max_correct']
+                                    if min_c <= correct_count <= max_c:
+                                        correct_indices = [i for i, s in enumerate(entry['scores']) if s > 0]
+                                        if correct_indices:
+                                            idx = correct_indices[0]
+                                            candidate = {
+                                                'id': entry['id'],
+                                                'dataset_id': entry.get('dataset_id'),
+                                                'gold': entry['gold'],
+                                                'correct_solution_text': entry['outputs'][idx],
+                                                'baseline_accuracy': correct_count / len(entry['scores'])
+                                            }
+                                            candidates.append(candidate)
+                            except: pass
+            
+            if not candidates:
+                 log.error("No baseline logs found and no candidates extracted. Please run a baseline sweep first.")
+                 return
 
-        if source_results and os.path.exists(source_results):
-            log.info(f"Loading existing results from {source_results}")
-            with open(source_results, 'r') as f:
-                results = [json.loads(line) for line in f if line.strip() and 'type' not in json.loads(line)]
-            return results
-
-        # Generate baseline if needed
-        baseline_cfg = self.config.get('baseline_generation', {})
-        if not baseline_cfg.get('enabled', False):
-            raise ValueError("No source results found and baseline generation is disabled")
-
-        log.info("Generating baseline results...")
-        return self.generate_baseline_data(baseline_cfg)
-
-    def generate_baseline_data(self, baseline_cfg):
-        """Generate baseline pass@k data for filtering."""
-        log.info("Generating baseline pass@k data...")
-
-        # Setup model
-        model_cfg = DictConfig({
-            "type": "api",
-            "provider": "openrouter",
-            "model_name": baseline_cfg['model_name'],
-            "base_url": self.config['api']['base_url'],
-            "api_key_env": self.config['api']['api_key_env']
-        })
-        model = APIModel(model_cfg)
-
-        # Load task data
+        log.info(f"Found {len(candidates)} candidate problems matching criteria {self.config['filter_criteria']}")
+        
+        # Load full task data to get problem text
+        from src.data.loader import load_task_data
         task_cfg = DictConfig(self.config['task'])
-        data = load_task_data(task_cfg, limit=baseline_cfg.get('limit'), seed=42)
+        full_data = load_task_data(task_cfg)
+        
+        # Maps
+        id_to_item = {}
+        for i, item in enumerate(full_data):
+            # Prefer unique_id or dataset_id
+            # Sweep logs use format "test/{subject}/{diff_idx}.json" or similar.
+            # MATH-500 usually has 'level', 'subject', 'problem', 'solution'.
+            # We can try to reconstruct a comparable ID if needed, or rely on problem content matching if IDs fail.
+            # But here, we will index by the integer index 'i' and string 'i' as fallback,
+            # and crucially, check if the loaded item has an 'id' or 'unique_id' field.
+            
+            # Construct a synthetic ID to match sweep logs if possible
+            # The sweep likely used a custom loader or version that injected these IDs.
+            # Let's assume the sweep log ID might be an index or a path.
+            
+            # Index by simple integer index as a strong fallback
+            id_to_item[str(i)] = item
+            id_to_item[i] = item 
+            
+            # Also index by exact text content hash/preview if we strictly need to match? 
+            # No, that's too heavy.
+            # Let's hope the 'id' in candidate (which is an int like 38) matches the index 'i' in the loaded dataset.
+            # The sweep log has "id": 38. If that corresponds to the 38th item in the dataset, we are good.
+            # MATH-500 test set has 500 items. If loaded in same order (sorted), indices should match.
 
-        # Baseline method config
-        method_cfg = DictConfig({
-            "name": "baseline",
-            "temperature": baseline_cfg['temperature'],
-            "top_p": 1.0
-        })
 
-        results = []
-        num_samples = baseline_cfg['num_samples']
-
-        for i, item in enumerate(tqdm(data, desc="Generating baseline")):
-            try:
-                prompt = get_prompt(self.config['task']['name'], item)
-                outputs = []
-                scores = []
-
-                # Generate multiple samples
-                for _ in range(num_samples):
-                    output, _ = run_sampling(model, prompt, method_cfg)
-                    outputs.append(output)
-
-                    # Grade (MATH-500 uses 'answer' field)
-                    gold = item.get('answer', item.get('solution', ''))
-                    is_correct = grade_math(output, gold)
-                    scores.append(1 if is_correct else 0)
-
-                # Store result
-                result = {
-                    'id': i,
-                    'dataset_id': item.get('unique_id', item.get('problem_id', i)),
-                    'original_prompt': prompt,
-                    'problem': item['problem'],
-                    'outputs': outputs,
-                    'scores': scores,
-                    'gold': gold,
-                    'num_correct': sum(scores),
-                    'level': item.get('level'),
-                    'subject': item.get('subject')
-                }
-                results.append(result)
-
-            except Exception as e:
-                log.error(f"Error generating baseline for problem {i}: {e}")
-
-        # Save baseline results
-        output_dir = Path(self.config['output_dir']) / "baseline_data"
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        baseline_file = output_dir / f"baseline_{timestamp}.json"
-
-        with open(baseline_file, 'w') as f:
-            json.dump(results, f, indent=2)
-
-        log.info(f"Saved baseline results to {baseline_file}")
-        return results
-
-    def filter_problems(self, baseline_results):
-        """Filter problems based on criteria (e.g., exactly 1-2 correct)."""
-        min_correct = self.config['filter_criteria']['min_correct']
-        max_correct = self.config['filter_criteria']['max_correct']
-
-        filtered = []
-        for result in baseline_results:
-            num_correct = result.get('num_correct', sum(result.get('scores', [])))
-            if min_correct <= num_correct <= max_correct:
-                # Find the correct solution(s)
-                correct_outputs = [
-                    output for output, score in zip(result['outputs'], result['scores'])
-                    if score == 1
-                ]
-                if correct_outputs:
-                    result['correct_outputs'] = correct_outputs
-                    filtered.append(result)
-
-        log.info(f"Filtered {len(filtered)} problems (from {len(baseline_results)} total)")
-        log.info(f"Criteria: {min_correct} <= num_correct <= {max_correct}")
-
-        return filtered
-
-    def run_experiment(self, max_workers=10):
-        """Run the self-correct prefix experiment."""
-
-        # Load or generate baseline data
-        baseline_results = self.load_or_generate_baseline()
-
-        # Filter problems
-        filtered_problems = self.filter_problems(baseline_results)
-
-        if not filtered_problems:
-            log.error("No problems match the filter criteria!")
-            return
-
-        # Get configuration
+        valid_candidates = []
+        for cand in candidates:
+             original = None
+             if 'dataset_id' in cand and cand['dataset_id']: 
+                 original = id_to_item.get(cand['dataset_id']) or id_to_item.get(str(cand['dataset_id']))
+             
+             if not original:
+                 original = id_to_item.get(cand['id'])
+                 
+             if original:
+                 cand['original_item'] = original
+                 valid_candidates.append(cand)
+        
+        candidates = valid_candidates
+        log.info(f"Matched {len(candidates)} candidates with original problem text.")
+        
+        # Setup Experiment
         prefix_lengths = self.config['prefix_lengths']
         target_models = self.config['target_models']
         temperature = self.config['temperature']
         max_new_tokens = self.config['max_new_tokens']
         top_p = self.config['top_p']
-        num_samples = self.config['num_samples']
-
-        # Results storage
+        
         results = {
             'config': self.config,
             'timestamp': datetime.now().isoformat(),
-            'num_problems': len(filtered_problems),
+            'num_candidates': len(candidates),
             'results_per_model': {}
         }
 
-        # Test each model
+        output_dir = Path(self.config['output_dir'])
+        output_dir.mkdir(parents=True, exist_ok=True)
+
         for model_info in target_models:
             model_name = model_info['name']
             model_id = model_info['model_name']
-
+            
             log.info(f"\n{'='*60}")
-            log.info(f"Testing model: {model_name} ({model_id})")
+            log.info(f"Testing model: {model_name}")
             log.info(f"{'='*60}")
-
-            # Initialize model
+            
             model_cfg = DictConfig({
                 "type": "api",
                 "provider": "openrouter",
@@ -277,109 +267,119 @@ class SelfCorrectPrefixExperiment:
                 "api_key_env": self.config['api']['api_key_env']
             })
             model = APIModel(model_cfg)
-
-            model_results = {
-                'model_id': model_id,
-                'results_per_prefix': {}
-            }
-
-            # Test each prefix length
+            
+            # Checkpoint Logic
+            checkpoint_file = output_dir / f"checkpoint_{model_name}.json"
+            if checkpoint_file.exists():
+                log.info(f"Found checkpoint for {model_name}, loading...")
+                with open(checkpoint_file, 'r') as f:
+                    model_results = json.load(f)
+            else:
+                model_results = {
+                    'model_id': model_id,
+                    'results_per_prefix': {}
+                }
+            
             for prefix_length in prefix_lengths:
-                log.info(f"\nTesting prefix length: {prefix_length} tokens")
-
-                prefix_results = []
-
-                # Use ThreadPoolExecutor for parallel processing
+                prefix_str = str(prefix_length)
+                
+                # Initialize or load existing results for this prefix
+                if prefix_str not in model_results['results_per_prefix']:
+                    model_results['results_per_prefix'][prefix_str] = {
+                        'accuracy': 0.0,
+                        'num_correct': 0,
+                        'details': []
+                    }
+                
+                # Get already processed IDs
+                processed_ids = set()
+                current_details = model_results['results_per_prefix'][prefix_str].get('details', [])
+                for item in current_details:
+                    if 'id' in item:
+                        processed_ids.add(item['id'])
+                
+                log.info(f"\nPrefix length: {prefix_length} tokens")
+                log.info(f"Previously processed: {len(processed_ids)} items")
+                
+                # Filter candidates to process
+                candidates_to_process = []
+                for cand in candidates:
+                    if cand['id'] not in processed_ids:
+                        candidates_to_process.append(cand)
+                
+                if not candidates_to_process:
+                    log.info(f"All items already processed for prefix {prefix_length}")
+                    continue
+                    
+                log.info(f"Items remaining to process: {len(candidates_to_process)}")
+                
+                # Process remaining
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    # Submit all tasks
                     futures = {
                         executor.submit(
-                            self.process_self_correct_problem,
-                            problem, prefix_length, model,
-                            temperature, max_new_tokens, top_p, num_samples
-                        ): problem['id']
-                        for problem in filtered_problems
+                            self.process_problem,
+                            cand, prefix_length, model,
+                            temperature, max_new_tokens, top_p
+                        ): cand['id']
+                        for cand in candidates_to_process
                     }
-
-                    # Process completed tasks
-                    for future in tqdm(as_completed(futures), total=len(filtered_problems), desc=f"Prefix {prefix_length}"):
+                    
+                    items_completed_since_save = 0
+                    save_interval = 10
+                    
+                    for future in tqdm(as_completed(futures), total=len(candidates_to_process), desc=f"Prefix {prefix_length}"):
                         result = future.result()
-                        prefix_results.append(result)
-
-                # Sort results by ID for consistent ordering
-                prefix_results.sort(key=lambda x: x['id'])
-
-                # Calculate totals
-                total_correct = sum(result.get('num_correct', 0) for result in prefix_results)
-                total_attempts = sum(len(result.get('scores', [])) for result in prefix_results)
-
-                # Calculate accuracy for this prefix length
-                accuracy = total_correct / total_attempts if total_attempts > 0 else 0
-
-                model_results['results_per_prefix'][prefix_length] = {
-                    'accuracy': accuracy,
-                    'total_correct': total_correct,
-                    'total_attempts': total_attempts,
-                    'num_problems': len(filtered_problems),
-                    'details': prefix_results
-                }
-
-                log.info(f"Prefix {prefix_length} tokens: Accuracy = {accuracy:.2%} ({total_correct}/{total_attempts})")
-
+                        
+                        # Update local state
+                        current_details.append(result)
+                        processed_ids.add(result['id'])
+                        
+                        # Update model_results
+                        model_results['results_per_prefix'][prefix_str]['details'] = current_details
+                        
+                        # Periodic Checkpoint
+                        items_completed_since_save += 1
+                        if items_completed_since_save >= save_interval:
+                            try:
+                                correct_count = sum(1 for r in current_details if r.get('is_correct', False))
+                                accuracy = correct_count / len(candidates) if candidates else 0
+                                model_results['results_per_prefix'][prefix_str]['num_correct'] = correct_count
+                                model_results['results_per_prefix'][prefix_str]['accuracy'] = accuracy
+                                
+                                with open(checkpoint_file, 'w') as f:
+                                    json.dump(model_results, f, indent=2)
+                                items_completed_since_save = 0
+                            except Exception as e:
+                                log.error(f"Failed to save checkpoint: {e}")
+                        
+                # Stats
+                correct_count = sum(1 for r in current_details if r.get('is_correct', False))
+                accuracy = correct_count / len(candidates) if candidates else 0
+                
+                model_results['results_per_prefix'][prefix_str]['accuracy'] = accuracy
+                model_results['results_per_prefix'][prefix_str]['num_correct'] = correct_count
+                
+                log.info(f"Prefix {prefix_length}: Accuracy = {accuracy:.2%} ({correct_count}/{len(candidates)})")
+                
+                # Save checkpoint
+                with open(checkpoint_file, 'w') as f:
+                    json.dump(model_results, f, indent=2)
+            
             results['results_per_model'][model_name] = model_results
 
-        # Save results
-        output_dir = Path(self.config['output_dir'])
-        output_dir.mkdir(parents=True, exist_ok=True)
-
+        # Final Save
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        output_file = output_dir / f"self_correct_prefix_results_{timestamp}.json"
-
+        output_file = output_dir / f"self_correct_results_{timestamp}.json"
         with open(output_file, 'w') as f:
             json.dump(results, f, indent=2)
-
-        log.info(f"\n{'='*60}")
-        log.info(f"Results saved to {output_file}")
-        log.info(f"{'='*60}")
-
-        # Print summary
-        self.print_summary(results)
-
-        return results
-
-    def print_summary(self, results):
-        """Print a summary of the results."""
-        print("\n" + "="*80)
-        print("SELF-CORRECT PREFIX EXPERIMENT SUMMARY")
-        print("="*80)
-
-        for model_name, model_data in results['results_per_model'].items():
-            print(f"\nModel: {model_name}")
-            print("-" * 60)
-            print(f"{'Prefix Length':<15} {'Accuracy':<15} {'Correct/Total':<20}")
-            print("-" * 60)
-
-            for prefix_length in sorted(model_data['results_per_prefix'].keys()):
-                prefix_data = model_data['results_per_prefix'][prefix_length]
-                accuracy = prefix_data['accuracy']
-                correct = prefix_data['total_correct']
-                total = prefix_data['total_attempts']
-                print(f"{prefix_length:<15} {accuracy:>6.2%}{'':<9} {correct}/{total:<15}")
-
-        print("="*80)
-
-def main():
-    parser = argparse.ArgumentParser(description="Run Self-Correct Prefix Experiment")
-    parser.add_argument("--config", type=str,
-                        default="configs/self_correct_prefix_experiment.yaml",
-                        help="Path to experiment config file")
-    parser.add_argument("--max-workers", type=int, default=10,
-                        help="Number of parallel workers (default: 10)")
-
-    args = parser.parse_args()
-
-    experiment = SelfCorrectPrefixExperiment(args.config)
-    experiment.run_experiment(max_workers=args.max_workers)
+            
+        log.info(f"Saved final results to {output_file}")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="configs/self_correct_prefix_experiment.yaml")
+    parser.add_argument("--max-workers", type=int, default=40)
+    args = parser.parse_args()
+    
+    experiment = SelfCorrectPrefixExperiment(args.config)
+    experiment.run_experiment(max_workers=args.max_workers)

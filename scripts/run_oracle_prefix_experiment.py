@@ -167,51 +167,129 @@ class OraclePrefixExperiment:
             })
             model = APIModel(model_cfg)
 
-            model_results = {
-                'model_id': model_id,
-                'results_per_prefix': {}
-            }
-
+            # Check for existing results to resume
+            # Construct expected output filename pattern to find potentially partial results?
+            # Actually, this script aggregates everything at the end. 
+            # To support resume, we need to save intermediate results or check if the final file exists.
+            
+            # Since the user specifically asked for "resume", and this script loops over models loops over prefixes...
+            # A simple resume strategy:
+            # Check if output file already exists for this exact configuration?
+            # The output filename includes timestamp, so it creates new one every time.
+            
+            # To fix this, we should really allow passing a specific output dir/file to append to, OR
+            # check the output directory for recent files matching the pattern.
+            
+            # However, simpler is to implement granular CHECKPOINTING.
+            # Save results after each prefix length?
+            
+            # Let's verify if we can skip:
+            
+            output_dir = Path(self.config['output_dir'])
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Look for existing complete file for this model? 
+            # The current structure saves ONE big file at the end. 
+            # We should probably save per-model or per-prefix.
+            
+            # Let's modify to save AFTER EACH PREFIX LENGTH to a "checkpoint" file
+            # And load it if exists.
+            
+            checkpoint_file = output_dir / f"checkpoint_{model_name}.json"
+            
+            if checkpoint_file.exists():
+                log.info(f"Found checkpoint for {model_name}, loading...")
+                with open(checkpoint_file, 'r') as f:
+                    model_results = json.load(f)
+            else:
+                 model_results = {
+                    'model_id': model_id,
+                    'results_per_prefix': {}
+                }
+            
             # Test each prefix length
             for prefix_length in prefix_lengths:
-                log.info(f"\nTesting prefix length: {prefix_length} tokens")
-
-                prefix_results = []
+                prefix_str = str(prefix_length)
+                
+                # Initialize or load existing results for this prefix
+                if prefix_str not in model_results['results_per_prefix']:
+                    model_results['results_per_prefix'][prefix_str] = {
+                        'accuracy': 0.0,
+                        'num_correct': 0,
+                        'num_total': len(oracle_data), # Add num_total here for consistency
+                        'details': []
+                    }
+                
+                # Get already processed IDs
+                processed_ids = set()
+                current_details = model_results['results_per_prefix'][prefix_str].get('details', [])
+                for item in current_details:
+                    if 'id' in item:
+                        processed_ids.add(item['id'])
+                
+                log.info(f"\nPrefix length: {prefix_length} tokens")
+                log.info(f"Previously processed: {len(processed_ids)} items")
+                
+                # Filter items to process
+                items_to_process = []
+                for item in oracle_data:
+                    if item['id'] not in processed_ids:
+                        items_to_process.append(item)
+                        
+                if not items_to_process:
+                    log.info(f"All items already processed for prefix {prefix_length}")
+                    continue
+                    
+                log.info(f"Items remaining to process: {len(items_to_process)}")
 
                 # Use ThreadPoolExecutor for parallel processing
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    # Submit all tasks
                     futures = {
                         executor.submit(
-                            self.process_oracle_problem,
-                            oracle_item, prefix_length, model,
+                            self.process_oracle_problem, 
+                            item, prefix_length, model, 
                             temperature, max_new_tokens, top_p
-                        ): oracle_item['id']
-                        for oracle_item in oracle_data
+                        ): item['id'] 
+                        for item in items_to_process
                     }
 
-                    # Process completed tasks
-                    for future in tqdm(as_completed(futures), total=len(oracle_data), desc=f"Prefix {prefix_length}"):
+                    items_completed_since_save = 0
+                    save_interval = 10
+                    
+                    # Use tqdm for progress bar
+                    for future in tqdm(as_completed(futures), total=len(items_to_process), desc=f"Prefix {prefix_length}"):
                         result = future.result()
-                        prefix_results.append(result)
+                        
+                        # Update local state
+                        current_details.append(result)
+                        processed_ids.add(result['id'])
+                        
+                        # Update model_results structure
+                        model_results['results_per_prefix'][prefix_str]['details'] = current_details
+                        
+                        # Periodic checkpoint
+                        items_completed_since_save += 1
+                        if items_completed_since_save >= save_interval:
+                            try:
+                                # Update stats before saving (optional, but good for visibility)
+                                correct_count = sum(1 for r in current_details if r.get('is_correct', False))
+                                model_results['results_per_prefix'][prefix_str]['num_correct'] = correct_count
+                                model_results['results_per_prefix'][prefix_str]['accuracy'] = correct_count / len(oracle_data) if oracle_data else 0
+                                
+                                with open(checkpoint_file, 'w') as f:
+                                    json.dump(model_results, f, indent=2)
+                                items_completed_since_save = 0
+                            except Exception as e:
+                                log.error(f"Failed to save checkpoint: {e}")
 
-                # Sort results by ID for consistent ordering
-                prefix_results.sort(key=lambda x: x['id'])
-
-                # Count correct answers
-                correct_count = sum(1 for r in prefix_results if r.get('is_correct', False))
-
-                # Calculate accuracy for this prefix length
+                # Final stats calculation and save for this prefix
+                correct_count = sum(1 for r in current_details if r.get('is_correct', False))
                 accuracy = correct_count / len(oracle_data) if oracle_data else 0
-
-                model_results['results_per_prefix'][prefix_length] = {
-                    'accuracy': accuracy,
-                    'num_correct': correct_count,
-                    'num_total': len(oracle_data),
-                    'details': prefix_results
-                }
-
                 log.info(f"Prefix {prefix_length} tokens: Accuracy = {accuracy:.2%} ({correct_count}/{len(oracle_data)})")
+                
+                # Save checkpoint
+                with open(checkpoint_file, 'w') as f:
+                    json.dump(model_results, f, indent=2)
 
             results['results_per_model'][model_name] = model_results
 
@@ -262,8 +340,8 @@ def main():
                         help="Path to experiment config file")
     parser.add_argument("--limit", type=int, default=None,
                         help="Limit number of problems to test")
-    parser.add_argument("--max-workers", type=int, default=10,
-                        help="Number of parallel workers (default: 10)")
+    parser.add_argument("--max-workers", type=int, default=40,
+                        help="Number of parallel workers (default: 40)")
 
     args = parser.parse_args()
 

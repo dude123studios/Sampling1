@@ -4,12 +4,12 @@ name: "temperature_sweep"
 description: "Temperature sweep on MATH-500"
 
 models:
-  - name: "deepseek-qwen3-8b"
-    model_name: "deepseek/deepseek-r1-0528-qwen3-8b"
+  - name: "qwen3-8b"
+    model_name: "qwen/qwen3-8b"
     type: "api"
     provider: "openrouter"
 parameters:
-  temperature: [0.3, 0.6, 0.9]
+  temperature: [0.6, 0.9]
   num_samples: [5]
   level_filter: [null]
   limit: [null]

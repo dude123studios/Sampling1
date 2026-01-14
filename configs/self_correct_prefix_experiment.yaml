@@ -4,12 +4,12 @@
 
 # Source experiment results (can be path to specific log.jsonl or will be generated)
 # If null, will generate new results using the baseline configuration
-source_results: null  # e.g., "results/2025-01-12/math/baseline/15-30-00/log.jsonl"
+source_results: "results/sweeps/temperature_sweep/qwen3-8b_temp0.6_n5_all_levels_2026-01-14_10-23-58/log.jsonl"
 
 # If source_results is null, use these settings to generate baseline data
 baseline_generation:
   enabled: true
-  num_samples: 10  # Number of samples per problem for pass@k
+  num_samples: 5  # Number of samples per problem for pass@k
   limit: 500       # Number of problems to test
   temperature: 0.6
   model_name: "qwen/qwen3-8b"
@@ -21,7 +21,7 @@ filter_criteria:
   max_correct: 2  # At most 2 correct (not too easy, not too hard)
 
 # Prefix token lengths to test
-prefix_lengths: [0, 32, 64, 128, 256, 512]
+prefix_lengths: [0, 16, 32, 64, 128]
 
 # Target models to test (typically same as baseline model)
 target_models:
@@ -34,7 +34,7 @@ max_new_tokens: 4096
 top_p: 1.0
 
 # Number of samples per problem per prefix length
-num_samples: 10  # Generate multiple samples to get robust statistics
+num_samples: 5  # Generate multiple samples to get robust statistics
 
 # Task configuration
 task:

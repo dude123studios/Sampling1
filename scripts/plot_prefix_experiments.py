@@ -21,10 +21,11 @@ from pathlib import Path
 import seaborn as sns
 
 # Configure matplotlib for high-quality output
-mpl.rcParams['pdf.fonttype'] = 42  # TrueType fonts
-mpl.rcParams['ps.fonttype'] = 42
-mpl.rcParams['font.family'] = 'serif'
-mpl.rcParams['font.serif'] = ['Times New Roman', 'Times', 'DejaVu Serif']
+# Configure matplotlib for high-quality output
+# mpl.rcParams['pdf.fonttype'] = 42  # TrueType fonts
+# mpl.rcParams['ps.fonttype'] = 42
+# mpl.rcParams['font.family'] = 'serif'
+# mpl.rcParams['font.serif'] = ['Times New Roman', 'Times', 'DejaVu Serif']
 mpl.rcParams['font.size'] = 11
 mpl.rcParams['axes.labelsize'] = 12
 mpl.rcParams['axes.titlesize'] = 13
@@ -55,9 +56,12 @@ class PrefixExperimentPlotter:
             prefix_lengths = []
             accuracies = []
 
-            for prefix_length in sorted(model_data['results_per_prefix'].keys()):
-                prefix_data = model_data['results_per_prefix'][prefix_length]
-                prefix_lengths.append(prefix_length)
+            # Sort by integer value of prefix length (keys are strings in JSON)
+            sorted_keys = sorted(model_data['results_per_prefix'].keys(), key=lambda x: int(x))
+
+            for prefix_length_str in sorted_keys:
+                prefix_data = model_data['results_per_prefix'][prefix_length_str]
+                prefix_lengths.append(int(prefix_length_str))  # Convert to int
                 accuracies.append(prefix_data['accuracy'] * 100)  # Convert to percentage
 
             data[model_name] = {
@@ -254,19 +258,19 @@ class PrefixExperimentPlotter:
         self.plot_accuracy_vs_prefix(
             data,
             "Oracle Prefix: Accuracy vs Prefix Length",
-            "oracle_accuracy_vs_prefix.pdf"
+            "oracle_accuracy_vs_prefix.png"
         )
 
         self.plot_marginal_gain(
             data,
             "Oracle Prefix: Marginal Gain per Token",
-            "oracle_marginal_gain.pdf"
+            "oracle_marginal_gain.png"
         )
 
         self.plot_cumulative_gain(
             data,
             "Oracle Prefix: Cumulative Accuracy Gain",
-            "oracle_cumulative_gain.pdf"
+            "oracle_cumulative_gain.png"
         )
 
         self.create_summary_table(data, "oracle_summary.txt")
@@ -280,19 +284,19 @@ class PrefixExperimentPlotter:
         self.plot_accuracy_vs_prefix(
             data,
             "Self-Correct Prefix: Accuracy vs Prefix Length",
-            "self_correct_accuracy_vs_prefix.pdf"
+            "self_correct_accuracy_vs_prefix.png"
         )
 
         self.plot_marginal_gain(
             data,
             "Self-Correct Prefix: Marginal Gain per Token",
-            "self_correct_marginal_gain.pdf"
+            "self_correct_marginal_gain.png"
         )
 
         self.plot_cumulative_gain(
             data,
             "Self-Correct Prefix: Cumulative Accuracy Gain",
-            "self_correct_cumulative_gain.pdf"
+            "self_correct_cumulative_gain.png"
         )
 
         self.create_summary_table(data, "self_correct_summary.txt")
@@ -310,7 +314,7 @@ class PrefixExperimentPlotter:
         self.plot_comparison(
             oracle_data,
             self_correct_data,
-            "comparison_oracle_vs_self_correct.pdf"
+            "comparison_oracle_vs_self_correct.png"
         )
 
 def main():

@@ -146,8 +146,61 @@ def run_single_experiment(run_config, output_base_dir, max_workers=15):
         level_str = f"_level{level_filter}"
         
     run_name = f"{model_name}_temp{temp}_n{n_samples}{level_str}_{timestamp}"
-    output_dir = Path(output_base_dir) / run_name
-    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Support Resuming: Check for existing incomplete runs with same configuration
+    # We ignore the timestamp part of the folder name for matching
+    candidate_pattern = f"{model_name}_temp{temp}_n{n_samples}{level_str}_*"
+    existing_dirs = sorted(Path(output_base_dir).glob(candidate_pattern))
+    
+    # Sort by modification time (most recent first) to resume the latest one
+    existing_dirs.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+    output_dir = None
+    processed_ids = set()
+    
+    for d in existing_dirs:
+        log_file = d / "log.jsonl"
+        if log_file.exists():
+            # Check if run is fully complete (has summary)
+            has_summary = False
+            current_processed_ids = set()
+            try:
+                with open(log_file, 'r') as f:
+                    for line in f:
+                        try:
+                            entry = json.loads(line)
+                            if entry.get("type") == "summary":
+                                has_summary = True
+                                break
+                            if "id" in entry:
+                                current_processed_ids.add(entry["id"])
+                        except json.JSONDecodeError:
+                            pass
+            except Exception:
+                pass
+                
+            if has_summary:
+                log.info(f"Skipping already completed run: {d.name}")
+                # If we found a completed one, we probably shouldn't resume a DIFFERENT incomplete one 
+                # for the exact same config unless we really mean to. 
+                # But strict resuming policy: if a complete one exists, we are done.
+                return {
+                    "run_name": d.name,
+                    "output_dir": str(d),
+                    "summary": {"status": "skipped_already_done"} 
+                }
+            
+            # Found an incomplete run - process it
+            output_dir = d
+            processed_ids = current_processed_ids
+            log.info(f"Resuming incomplete run: {d.name} ({len(processed_ids)} items done)")
+            break
+    
+    if output_dir is None:
+        # Create new run
+        output_dir = Path(output_base_dir) / run_name
+        output_dir.mkdir(parents=True, exist_ok=True)
+
 
     logger = ExperimentLogger(str(output_dir))
 
@@ -172,16 +225,65 @@ def run_single_experiment(run_config, output_base_dir, max_workers=15):
     data = load_task_data(task_cfg, limit=limit, seed=42)
     log.info(f"Loaded {len(data)} items")
 
+    # Filter out already processed items
+    if processed_ids:
+        original_len = len(data)
+        # Assuming data is a list of items where 'id' corresponds to index 'i' in enumerate(data)
+        # In process_item, we passed 'i' as the ID in the result dictionary.
+        # Wait, process_item uses: "id": i
+        # So processed_ids are INDICES into the original data list.
+        # We need to filter based on INDEX.
+        
+        # We can't easily remove items from the list because indices would shift?
+        # No, we're using Enumerate(data).
+        # Better: keep data as is, but in ThreadPoolExecutor submission, skip processed indices.
+        pass
+        
     # Run experiment
     all_results = []
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(process_item, i, item, model, run_config): i for i, item in enumerate(data)}
+    
+    # Pre-populate all_results with processed ones?
+    # No, we don't need to reload them unless we want to recalc summary.
+    # To recalc summary correctly at the end, we SHOULD reload them or just append new ones?
+    # Actually, current script RE-CALCULATES summary from all_results.
+    # If we don't load previous results into all_results, the Final Summary will only be for the NEW items!
+    # This is bad.
+    
+    # We should restart with all_results containing previous results if resuming.
+    # We already scanned file to get IDs. We should scan again or reuse logic to populate all_results.
+    
+    # Let's refactor the scan loop above slightly to populate all_results too.
+    # But I can't easily jump back in this edit.
+    # I'll modify the logic below to populate all_results from log file if reusing dir.
+    
+    if output_dir and (output_dir / "log.jsonl").exists():
+        with open(output_dir / "log.jsonl", 'r') as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                    if "metrics" in entry and "id" in entry:
+                         all_results.append(entry)
+                except:
+                    pass
+    
+    log.info(f"Loaded {len(all_results)} existing results from logs")
 
-        for future in tqdm(as_completed(futures), total=len(data), desc=f"Running {run_name}"):
-            result = future.result()
-            if "metrics" in result:
-                all_results.append(result)
-                logger.log(result)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit valid tasks (skipping processed ones)
+        futures = {}
+        for i, item in enumerate(data):
+            if i in processed_ids:
+                continue
+            futures[executor.submit(process_item, i, item, model, run_config)] = i
+
+        if not futures:
+             log.info("No new items to process.")
+        else:
+             for future in tqdm(as_completed(futures), total=len(futures), desc=f"Running {run_name}"):
+                result = future.result()
+                if "metrics" in result:
+                    all_results.append(result)
+                    logger.log(result)
 
     # Calculate summary
     summary = None
