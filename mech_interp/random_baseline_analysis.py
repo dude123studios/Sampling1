@@ -327,10 +327,13 @@ class RandomBaselineExperiment:
         log.info(f"Saved {len(all_results)} entries to {self.output_dir / 'random_baseline_full.json'}")
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        config_path = sys.argv[1]
-    else:
-        config_path = "configs/mech_interp/dla_patching_config.yaml"
-        
-    exp = RandomBaselineExperiment(config_path)
+    import argparse
+    parser = argparse.ArgumentParser(description="Run Random Baseline Analysis")
+    parser.add_argument("--config", type=str, 
+                       default="configs/mech_interp/dla_patching_config.yaml",
+                       help="Path to config file")
+    
+    args = parser.parse_args()
+    
+    exp = RandomBaselineExperiment(args.config)
     exp.run_experiment()
