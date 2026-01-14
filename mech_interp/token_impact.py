@@ -123,15 +123,26 @@ class TokenImpactExperiment:
 
         # Hook to capture activations
         def hook_fn(layer_idx):
-            def hook(module, input, output):
-                # output[0] is hidden states [batch, seq, hidden]
+                # output[0] is hidden states
                 hidden = output[0]
-                # Extract positions we care about
-                for pos in positions:
-                    if pos < hidden.shape[1]:
-                        if layer_idx not in activations:
-                            activations[layer_idx] = []
-                        activations[layer_idx].append(hidden[0, pos, :].detach().cpu())
+                
+                # Check dimensions to avoid IndexError
+                if len(hidden.shape) == 3:
+                    # [batch, seq, hidden]
+                    batch_idx = 0
+                    for pos in positions:
+                        if pos < hidden.shape[1]:
+                            if layer_idx not in activations:
+                                activations[layer_idx] = []
+                            activations[layer_idx].append(hidden[batch_idx, pos, :].detach().cpu())
+                elif len(hidden.shape) == 2:
+                    # [seq, hidden] (likely batch=1 squeezed) or [batch, hidden] (token by token?)
+                    # Assuming [seq, hidden] for batch=1
+                    for pos in positions:
+                        if pos < hidden.shape[0]:
+                            if layer_idx not in activations:
+                                activations[layer_idx] = []
+                            activations[layer_idx].append(hidden[pos, :].detach().cpu())
             return hook
 
         # Register hooks
