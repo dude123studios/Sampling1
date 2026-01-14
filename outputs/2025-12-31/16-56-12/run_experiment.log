@@ -1,0 +1,34 @@
+[2025-12-31 16:56:12,111][__main__][INFO] - model:
+  type: api
+  provider: openrouter
+  model_name: deepseek/deepseek-r1-distill-qwen-32b
+  base_url: https://openrouter.ai/api/v1
+  api_key_env: OPENROUTER_API_KEY
+task:
+  name: math
+  dataset: DigitalLearningGmbH/MATH-lighteval
+  split: test
+  subset_level: Level 5
+  metric: accuracy
+method:
+  name: baseline
+  type: standard
+  temperature: 0.7
+  top_p: 0.95
+  max_new_tokens: 4096
+seed: 42
+limit: 200
+num_samples: 5
+output_dir: results/${now:%Y-%m-%d}/${task.name}/${method.name}/${now:%H-%M-%S}
+debug: false
+max_workers: 50
+
+[2025-12-31 16:56:12,112][__main__][INFO] - Loading model...
+[2025-12-31 16:56:12,113][__main__][INFO] - Running with 50 workers
+[2025-12-31 16:56:12,113][src.data.loader][INFO] - Loading task: math
+[2025-12-31 16:56:13,629][__main__][INFO] - Loaded 200 items
+[2025-12-31 19:05:15,561][__main__][INFO] - Summary num_correct: 2.2200
+[2025-12-31 19:05:15,562][__main__][INFO] - Summary pass@1: 0.4440
+[2025-12-31 19:05:15,562][__main__][INFO] - Summary pass@5: 0.5700
+[2025-12-31 19:05:15,563][__main__][INFO] - Summary one@k: 0.5700
+[2025-12-31 19:05:15,563][__main__][INFO] - Experiment complete. Summary logged to results/2025-12-31/math/baseline/16-56-12

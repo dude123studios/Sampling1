@@ -1,0 +1,57 @@
+# Token Impact Identification Configuration
+# Identifies tokens across trajectories that are most impactful by comparing
+# 1st vs 2nd most likely token choices and measuring layer activation divergence
+
+name: token_impact_identification
+
+# Model configuration
+model:
+  name: "qwen3-8b"
+  model_id: "Qwen/Qwen3-8B"
+  type: "local"
+  device: "cuda"
+  dtype: "float16"
+
+# Data source (from sweep results)
+data_source:
+  # Path pattern to find qwen3-8b temp=0.6 results
+  sweep_dir: "results/sweeps"
+  model_name: "qwen3-8b"
+  temperature: 0.6
+  # Only use Level 5 (hardest) problems
+  level_filter: 5
+
+# Token forcing experiment parameters
+token_forcing:
+  # Cutoff points to test (8th, 16th, 24th, ..., 64th token)
+  cutoff_positions: [8, 16, 24, 32, 40, 48, 56, 64]
+
+  # Continuation parameters
+  continuation_length: 128  # Generate exactly 128 tokens
+  temperature: 0.6  # Same as original trajectory
+  top_p: 1.0
+
+  # Force 1st or 2nd most likely token at cutoff
+  token_choices: ["top1", "top2"]  # Most likely vs 2nd most likely
+
+# Layer activation analysis
+layer_analysis:
+  # Layers to analyze (Qwen3-8B has 32 layers, 0-indexed means layers 0-31)
+  layers: [15, 20, 25, 31]
+
+  # Averaging for stability: average activations every 32 tokens in the 128 continuation
+  # This means we take activations at positions [0, 32, 64, 96] and average them
+  averaging_positions: [0, 32, 64, 96]  # Within the 128 token continuation
+
+  # Activation type: output of attention + MLP (residual stream after layer)
+  activation_type: "residual_stream"
+
+  # Compute every 8 tokens for first 128 generated tokens
+  # This means we compare at positions [8, 16, 24, ..., 128]
+  comparison_positions: [8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128]
+
+# Output configuration
+output:
+  base_dir: "mech_interp/token_impact_results"
+  save_activations: true  # Save intermediate activations for debugging
+  save_divergence_scores: true  # Save cosine similarity scores

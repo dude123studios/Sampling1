@@ -1,0 +1,72 @@
+# Direct Logit Attribution (DLA) and Activation Patching Configuration
+# Quantifies which layers contribute to preferring token A over token B
+
+name: dla_patching_experiments
+
+# Model configuration
+model:
+  name: "qwen3-8b"
+  model_id: "Qwen/Qwen3-8B"
+  type: "local"
+  device: "cuda"
+  dtype: "float16"
+
+  # Deterministic settings
+  seed: 42
+  deterministic: true
+  dropout: 0.0
+
+# Global setup
+global_setup:
+  disable_dropout: true
+  set_deterministic: true
+  use_fp16: true
+
+# Branching points (from token impact identification results)
+# This will be populated after running token impact identification
+branching_points:
+  # Will be populated with: {problem_id: [token_positions]}
+  source_file: null  # Will be set to token_impact results
+
+# Direct Logit Attribution (DLA) settings
+dla_config:
+  enabled: true
+
+  # Compute DLA for all layers
+  layers: "all"  # Will analyze all 32 layers
+
+  # Focus bands for detailed analysis
+  analysis_bands:
+    abstraction: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]  # Layers 8-20
+    commitment: [22, 23, 24, 25, 26, 27, 28]  # Layers 22-28
+
+  # Statistics to compute
+  compute_stats:
+    - "mean_dla_per_layer"
+    - "variance_per_layer"
+    - "difference_curve"  # top1 - top2
+
+# Activation Patching Configuration
+patching:
+  enabled: true
+
+  # What to patch (in order of importance)
+  patch_types:
+    - "residual_stream"  # Full residual stream
+    - "attention_output"  # Just attention output
+    - "mlp_output"  # Just MLP output
+
+  # Patch at each layer
+  layers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+
+  # Measure change in logit difference between top1 and top2 tokens
+  metric: "logit_difference"
+
+# Gradient attribution parameters
+gradient_analysis:
+  enabled: true
+  compute_gradients: true
+  layers: [15, 20, 25, 31]  # Same as layer_analysis
+
+# Number of problems to analyze
+limit: null  # Use all Level 5 problems found in the sweep results

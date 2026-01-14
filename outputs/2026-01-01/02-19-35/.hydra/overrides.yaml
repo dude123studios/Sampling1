@@ -1,0 +1,7 @@
+- model=openrouter
+- model.model_name=qwen/qwen3-8b
+- task=math
+- limit=200
+- max_workers=50
+- num_samples=5
+- method=baseline

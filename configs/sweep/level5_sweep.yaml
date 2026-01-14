@@ -1,0 +1,34 @@
+
+# Test on hardest problems only (Level 5)
+name: "level5_sweep"
+description: "Test on hardest problems only (Level 5)"
+
+models:
+  - name: "qwen3-8b"
+    model_name: "qwen/qwen3-8b"
+    type: "api"
+    provider: "openrouter"
+  - name: "deepseek-qwen3-8b"
+    model_name: "deepseek/deepseek-r1-distill-qwen3-8b"
+    type: "api"
+    provider: "openrouter"
+  - name: "qwq-32b"
+    model_name: "qwen/qwq-32b-preview"
+    type: "api"
+    provider: "openrouter"
+
+parameters:
+  temperature: [0.6]
+  num_samples: [25]
+  level_filter: [5]
+  limit: [null]
+
+task:
+  name: "math"
+  dataset: "HuggingFaceH4/MATH-500"
+  split: "test"
+  level_filter: 5
+  subject_filter: null
+
+method:
+  name: "baseline"

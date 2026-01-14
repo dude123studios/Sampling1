@@ -1,0 +1,26 @@
+description: Temperature sweep on MATH-500
+method:
+  name: baseline
+models:
+- model_name: deepseek/deepseek-r1-0528-qwen3-8b
+  name: deepseek-qwen3-8b
+  provider: openrouter
+  type: api
+name: temperature_sweep
+parameters:
+  level_filter:
+  - null
+  limit:
+  - null
+  num_samples:
+  - 5
+  temperature:
+  - 0.3
+  - 0.6
+  - 0.9
+task:
+  dataset: HuggingFaceH4/MATH-500
+  level_filter: null
+  name: math
+  split: test
+  subject_filter: null

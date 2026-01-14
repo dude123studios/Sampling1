@@ -1,0 +1,32 @@
+[2025-12-28 15:13:42,686][__main__][INFO] - model:
+  type: api
+  provider: openrouter
+  model_name: meta-llama/llama-3-8b-instruct
+  base_url: https://openrouter.ai/api/v1
+  api_key_env: OPENROUTER_API_KEY
+task:
+  name: math
+  dataset: DigitalLearningGmbH/MATH-lighteval
+  split: test
+  subset_level: Level 5
+  metric: accuracy
+method:
+  name: baseline
+  type: standard
+  temperature: 0.7
+  top_p: 0.95
+  max_new_tokens: 4096
+seed: 42
+limit: 2
+num_samples: 1
+output_dir: results/${now:%Y-%m-%d}/${task.name}/${method.name}
+debug: false
+max_workers: 2
+
+[2025-12-28 15:13:42,687][__main__][INFO] - Loading model...
+[2025-12-28 15:13:42,687][__main__][INFO] - Running with 2 workers
+[2025-12-28 15:13:42,687][src.data.loader][INFO] - Loading task: math
+[2025-12-28 15:13:44,487][__main__][INFO] - Loaded 2 items
+[2025-12-28 15:13:56,718][__main__][INFO] - Summary pass@1: 0.0000
+[2025-12-28 15:13:56,718][__main__][INFO] - Summary one@k: 0.0000
+[2025-12-28 15:13:56,719][__main__][INFO] - Experiment complete. Summary logged to results/2025-12-28/math/baseline

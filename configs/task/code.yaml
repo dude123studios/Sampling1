@@ -1,0 +1,4 @@
+name: code
+dataset: "livecodebench/code_generation"
+split: "test"
+metric: "pass_at_1"

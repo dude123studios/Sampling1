@@ -1,0 +1,6 @@
+- model=openrouter
+- model.model_name=qwen/qwen3-8b
+- task=math
+- limit=10
+- num_samples=3
+- method=seed_sampling

@@ -1,0 +1,7 @@
+name: pruning
+type: standard
+chunk_size: 128
+max_chunks: 10
+similarity_threshold: 0.9
+embedding_model: "all-MiniLM-L6-v2"
+temperature: 0.7

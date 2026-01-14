@@ -1,0 +1,32 @@
+[2025-12-28 15:58:42,180][__main__][INFO] - model:
+  type: api
+  provider: openrouter
+  model_name: qwen/qwen3-8b
+  base_url: https://openrouter.ai/api/v1
+  api_key_env: OPENROUTER_API_KEY
+task:
+  name: math
+  dataset: DigitalLearningGmbH/MATH-lighteval
+  split: test
+  subset_level: Level 5
+  metric: accuracy
+method:
+  name: baseline
+  type: standard
+  temperature: 0.7
+  top_p: 0.95
+  max_new_tokens: 4096
+seed: 42
+limit: 10
+num_samples: 3
+output_dir: results/${now:%Y-%m-%d}/${task.name}/${method.name}
+debug: false
+max_workers: 10
+
+[2025-12-28 15:58:42,180][__main__][INFO] - Loading model...
+[2025-12-28 15:58:42,181][__main__][INFO] - Running with 10 workers
+[2025-12-28 15:58:42,181][src.data.loader][INFO] - Loading task: math
+[2025-12-28 15:58:43,800][__main__][INFO] - Loaded 10 items
+[2025-12-28 16:02:54,708][__main__][INFO] - Summary pass@1: 0.0333
+[2025-12-28 16:02:54,709][__main__][INFO] - Summary one@k: 0.1000
+[2025-12-28 16:02:54,710][__main__][INFO] - Experiment complete. Summary logged to results/2025-12-28/math/baseline

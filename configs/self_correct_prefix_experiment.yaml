@@ -1,0 +1,52 @@
+# Configuration for Self-Correct Prefix Experiment
+# This experiment finds problems where a model gets pass@k correct on exactly 1-2 attempts,
+# then tests if providing prefixes of the correct attempt helps the model solve more consistently
+
+# Source experiment results (can be path to specific log.jsonl or will be generated)
+# If null, will generate new results using the baseline configuration
+source_results: null  # e.g., "results/2025-01-12/math/baseline/15-30-00/log.jsonl"
+
+# If source_results is null, use these settings to generate baseline data
+baseline_generation:
+  enabled: true
+  num_samples: 10  # Number of samples per problem for pass@k
+  limit: 500       # Number of problems to test
+  temperature: 0.6
+  model_name: "qwen/qwen3-8b"
+
+# Filter criteria for selecting problems
+# Only use problems where the model got exactly min_correct to max_correct solutions right
+filter_criteria:
+  min_correct: 1  # At least 1 correct
+  max_correct: 2  # At most 2 correct (not too easy, not too hard)
+
+# Prefix token lengths to test
+prefix_lengths: [0, 32, 64, 128, 256, 512]
+
+# Target models to test (typically same as baseline model)
+target_models:
+  - name: "qwen3-8b"
+    model_name: "qwen/qwen3-8b"
+
+# Sampling parameters for prefix testing
+temperature: 0.6
+max_new_tokens: 4096
+top_p: 1.0
+
+# Number of samples per problem per prefix length
+num_samples: 10  # Generate multiple samples to get robust statistics
+
+# Task configuration
+task:
+  name: "math"
+  dataset: "HuggingFaceH4/MATH-500"
+  split: "test"
+  level_filter: null  # Use all levels, or set to 5 for hardest only
+
+# Output directory
+output_dir: "results/self_correct_prefix"
+
+# API configuration
+api:
+  base_url: "https://openrouter.ai/api/v1"
+  api_key_env: "OPENROUTER_API_KEY"

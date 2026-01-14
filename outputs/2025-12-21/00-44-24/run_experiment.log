@@ -1,0 +1,33 @@
+[2025-12-21 00:44:24,347][__main__][INFO] - model:
+  type: api
+  provider: openrouter
+  model_name: qwen/qwen3-8b
+  base_url: https://openrouter.ai/api/v1
+  api_key_env: OPENROUTER_API_KEY
+task:
+  name: math
+  dataset: DigitalLearningGmbH/MATH-lighteval
+  split: test
+  subset_level: Level 5
+  metric: accuracy
+method:
+  name: pruning
+  type: standard
+  chunk_size: 64
+  similarity_threshold: 0.9
+  embedding_model: all-MiniLM-L6-v2
+  temperature: 0.7
+seed: 42
+limit: 1
+num_samples: 1
+output_dir: results/${now:%Y-%m-%d}/${task.name}/${method.name}
+debug: false
+
+[2025-12-21 00:44:24,348][__main__][INFO] - Loading model...
+[2025-12-21 00:44:24,348][src.data.loader][INFO] - Loading task: math
+[2025-12-21 00:44:28,631][__main__][INFO] - Loaded 1 items
+[2025-12-21 00:44:28,652][sentence_transformers.SentenceTransformer][INFO] - Use pytorch device_name: mps
+[2025-12-21 00:44:28,652][sentence_transformers.SentenceTransformer][INFO] - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+[2025-12-21 00:44:40,565][__main__][INFO] - Summary pass@1: 0.0000
+[2025-12-21 00:44:40,565][__main__][INFO] - Summary one@k: 0.0000
+[2025-12-21 00:44:40,565][__main__][INFO] - Experiment complete. Summary logged to results/2025-12-21/math/pruning

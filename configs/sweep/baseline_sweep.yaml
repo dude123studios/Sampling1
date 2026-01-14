@@ -1,0 +1,34 @@
+
+# Baseline comparison across models with standard temperature
+name: "baseline_sweep"
+description: "Baseline comparison across models with standard temperature"
+
+models:
+  - name: "qwen3-8b"
+    model_name: "qwen/qwen3-8b"
+    type: "api"
+    provider: "openrouter"
+  - name: "deepseek-qwen3-8b"
+    model_name: "deepseek/deepseek-r1-distill-qwen3-8b"
+    type: "api"
+    provider: "openrouter"
+  - name: "qwq-32b"
+    model_name: "qwen/qwq-32b-preview"
+    type: "api"
+    provider: "openrouter"
+
+parameters:
+  temperature: [0.6]
+  num_samples: [10, 25, 50]
+  level_filter: [null]
+  limit: [null]
+
+task:
+  name: "math"
+  dataset: "HuggingFaceH4/MATH-500"
+  split: "test"
+  level_filter: null
+  subject_filter: null
+
+method:
+  name: "baseline"

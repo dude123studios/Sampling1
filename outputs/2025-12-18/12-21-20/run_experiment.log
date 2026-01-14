@@ -1,0 +1,24 @@
+[2025-12-18 12:21:20,123][__main__][INFO] - model:
+  type: api
+  provider: openrouter
+  model_name: qwen/qwen-3-8b-instruct
+  base_url: https://openrouter.ai/api/v1
+  api_key_env: OPENROUTER_API_KEY
+task:
+  name: math
+  dataset: hendrycks/competition_math
+  split: test
+  subset_level: Level 5
+  metric: accuracy
+method:
+  name: baseline
+  type: standard
+  temperature: 0.7
+  top_p: 0.95
+seed: 42
+limit: 25
+output_dir: results/${now:%Y-%m-%d}/${task.name}/${method.name}
+debug: false
+
+[2025-12-18 12:21:20,124][__main__][INFO] - Loading model...
+[2025-12-18 12:21:20,124][src.data.loader][INFO] - Loading task: math

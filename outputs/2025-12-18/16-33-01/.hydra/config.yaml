@@ -1,0 +1,22 @@
+model:
+  type: api
+  provider: openrouter
+  model_name: qwen/qwen3-8b
+  base_url: https://openrouter.ai/api/v1
+  api_key_env: OPENROUTER_API_KEY
+task:
+  name: math
+  dataset: DigitalLearningGmbH/MATH-lighteval
+  split: test
+  subset_level: Level 5
+  metric: accuracy
+method:
+  name: baseline
+  type: standard
+  temperature: 0.7
+  top_p: 0.95
+seed: 42
+limit: 1
+num_samples: 1
+output_dir: results/${now:%Y-%m-%d}/${task.name}/${method.name}
+debug: false

@@ -1,0 +1,42 @@
+[2025-12-18 16:21:57,234][__main__][INFO] - model:
+  type: api
+  provider: openrouter
+  model_name: qwen/qwen-3-8b-instruct
+  base_url: https://openrouter.ai/api/v1
+  api_key_env: OPENROUTER_API_KEY
+task:
+  name: math
+  dataset: DigitalLearningGmbH/MATH-lighteval
+  split: test
+  subset_level: Level 5
+  metric: accuracy
+method:
+  name: baseline
+  type: standard
+  temperature: 0.7
+  top_p: 0.95
+seed: 42
+limit: 1
+num_samples: 5
+output_dir: results/${now:%Y-%m-%d}/${task.name}/${method.name}
+debug: false
+
+[2025-12-18 16:21:57,235][__main__][INFO] - Loading model...
+[2025-12-18 16:21:57,235][src.data.loader][INFO] - Loading task: math
+[2025-12-18 16:21:58,583][__main__][INFO] - Loaded 1 items
+[2025-12-18 16:21:58,584][__main__][INFO] - Processing item 0 (samples=5)...
+[2025-12-18 16:22:01,974][__main__][ERROR] - Error processing item 0: 400 Client Error: Bad Request for url: https://openrouter.ai/api/v1/chat/completions
+Traceback (most recent call last):
+  File "/Users/atharvnaphade/Code/Research/creativity/repo/sampling-limits-neurips/scripts/run_experiment.py", line 57, in main
+    output = run_sampling(model, prompt, cfg.method)
+  File "/Users/atharvnaphade/Code/Research/creativity/repo/sampling-limits-neurips/scripts/../src/sampling/engine.py", line 24, in run_sampling
+    return model.generate(prompt, **method_config)
+           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/atharvnaphade/Code/Research/creativity/repo/sampling-limits-neurips/scripts/../src/models/api_model.py", line 59, in generate
+    raise last_error or Exception("Unknown API error")
+  File "/Users/atharvnaphade/Code/Research/creativity/repo/sampling-limits-neurips/scripts/../src/models/api_model.py", line 49, in generate
+    response.raise_for_status()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/atharvnaphade/Code/Research/creativity/repo/.venv/lib/python3.13/site-packages/requests/models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 400 Client Error: Bad Request for url: https://openrouter.ai/api/v1/chat/completions

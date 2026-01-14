@@ -1,0 +1,31 @@
+[2025-12-19 19:59:29,454][__main__][INFO] - model:
+  type: api
+  provider: openrouter
+  model_name: qwen/qwen3-8b
+  base_url: https://openrouter.ai/api/v1
+  api_key_env: OPENROUTER_API_KEY
+task:
+  name: math
+  dataset: DigitalLearningGmbH/MATH-lighteval
+  split: test
+  subset_level: Level 5
+  metric: accuracy
+method:
+  name: injection
+  type: standard
+  injection_token: ' Instead,'
+  depth: 4
+  max_new_tokens_chunk: 512
+  temperature: 0.7
+seed: 42
+limit: 3
+num_samples: 1
+output_dir: results/${now:%Y-%m-%d}/${task.name}/${method.name}
+debug: false
+
+[2025-12-19 19:59:29,455][__main__][INFO] - Loading model...
+[2025-12-19 19:59:29,455][src.data.loader][INFO] - Loading task: math
+[2025-12-19 19:59:30,970][__main__][INFO] - Loaded 3 items
+[2025-12-19 20:00:36,266][__main__][INFO] - Summary pass@1: 0.0000
+[2025-12-19 20:00:36,266][__main__][INFO] - Summary one@k: 0.0000
+[2025-12-19 20:00:36,266][__main__][INFO] - Experiment complete. Summary logged to results/2025-12-19/math/injection

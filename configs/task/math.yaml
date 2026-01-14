@@ -1,0 +1,13 @@
+name: math
+dataset: "HuggingFaceH4/MATH-500"
+split: "test"
+# Level filtering options:
+# - Single level: level_filter: 5
+# - Range of levels: level_filter: [3, 5]
+# - Specific levels: level_filter: [1, 3, 5]
+# - All levels: level_filter: null (or omit)
+level_filter: null  # Use all levels by default
+# Subject filtering (optional):
+# subject_filter: ["Algebra", "Geometry"]
+subject_filter: null
+metric: "accuracy"

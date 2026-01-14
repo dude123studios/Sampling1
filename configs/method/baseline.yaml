@@ -1,0 +1,5 @@
+name: baseline
+type: standard
+temperature: 0.7
+top_p: 0.95
+max_new_tokens: 4096

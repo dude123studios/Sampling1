@@ -1,0 +1,5 @@
+name: gpqa
+dataset: "IdDavid/gpqa"
+subset_name: "gpqa_diamond"
+split: "train" # Using train as test for diamond as per instructions
+metric: "accuracy"

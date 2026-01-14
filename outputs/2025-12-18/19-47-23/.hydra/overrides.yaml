@@ -1,0 +1,6 @@
+- model=openrouter
+- model.model_name=nvidia/nemotron-3-nano-30b-a3b
+- task=math
+- limit=1
+- num_samples=3
+- method=baseline

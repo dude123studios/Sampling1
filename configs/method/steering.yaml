@@ -1,0 +1,6 @@
+name: vector_steering
+type: local_only           # Flag to prevent running on API
+layer_idx: 15
+coeff: 1.5
+vector_source: "assets/vectors/refusal_dir.pt"
+temperature: 0.7

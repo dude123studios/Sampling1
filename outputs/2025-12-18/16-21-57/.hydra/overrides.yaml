@@ -1,0 +1,6 @@
+- model=openrouter
+- model.model_name=qwen/qwen-3-8b-instruct
+- task=math
+- limit=1
+- num_samples=5
+- method=baseline

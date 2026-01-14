@@ -1,0 +1,12 @@
+defaults:
+  - model: openrouter             # Default to cheap API
+  - task: math
+  - method: baseline
+  - _self_
+
+seed: 42
+limit: null                       # If set to int (e.g. 10), runs SUBSET
+num_samples: 8                    # Number of rollouts per problem (Pass@K)
+output_dir: "results/${now:%Y-%m-%d}/${task.name}/${method.name}/${now:%H-%M-%S}"
+debug: false
+max_workers: 15

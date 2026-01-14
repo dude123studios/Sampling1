@@ -1,0 +1,7 @@
+- model=openrouter
+- model.model_name=deepseek/deepseek-r1-distill-qwen-32b
+- task=math
+- limit=200
+- max_workers=50
+- num_samples=5
+- method=baseline

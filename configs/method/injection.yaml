@@ -1,0 +1,6 @@
+name: injection
+type: standard
+injection_token: " Instead,"
+depth: 2
+max_new_tokens_chunk: 4096
+temperature: 0.7
