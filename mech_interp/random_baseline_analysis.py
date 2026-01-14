@@ -20,6 +20,7 @@ from pathlib import Path
 from tqdm import tqdm
 from typing import List, Dict, Tuple, Optional
 import numpy as np
+import argparse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Configure logging
@@ -69,20 +70,16 @@ class RandomBaselineExperiment:
         self.gradient_layers = self.config['gradient_analysis']['layers']
 
     def load_sweep_data(self) -> List[Dict]:
-        """Load Level 5 problems from sweep results (same as token_impact.py)."""
+        """Load Level 5 problems from sweep results (recursive search)."""
         sweep_dir = Path("results/sweeps")
-        # Hardcoded for now based on what worked in token_impact.py or config defaults
-        # We'll try to find sweep directories dynamically if config path is vague
+        log.info(f"Looking for Level 5 problems (recursively) in {sweep_dir.absolute()}")
         
-        log.info(f"Looking for Level 5 problems in {sweep_dir}")
         problems = []
         
         if sweep_dir.exists():
-            for subdir in sweep_dir.glob("*"):
-                log_file = subdir / "log.jsonl"
-                if not log_file.exists():
-                    continue
-                
+            # Use rglob to find log.jsonl in any subdirectory
+            for log_file in sweep_dir.rglob("log.jsonl"):
+                log.info(f"Found log file: {log_file}")
                 with open(log_file, 'r') as f:
                     for line in f:
                         if not line.strip(): continue
@@ -184,7 +181,7 @@ class RandomBaselineExperiment:
         results = {}
         for layer_idx in self.gradient_layers:
             if layer_idx in activations and activations[layer_idx].grad is not None:
-                # Gradient at the last position (which caused the logit)
+                # Gradient at the position of interest
                 # Act shape: [1, seq, hidden]
                 # We usually want the gradient at the token position that generated the logit.
                 grad = activations[layer_idx].grad[0, -1, :]
@@ -258,16 +255,26 @@ class RandomBaselineExperiment:
 
     def run_experiment(self):
         problems = self.load_sweep_data()
-        all_results = []
         
-        for prob in tqdm(problems, desc="Processing Random Baseline"):
+        if not problems:
+            log.warning("No problems loaded! Check your data source directory.")
+            return
+
+        all_results = []
+        checkpoint_interval = 10
+        checkpoint_file = self.output_dir / "random_baseline_partial.json"
+        
+        for idx, prob in enumerate(tqdm(problems, desc="Processing Random Baseline")):
             # Setup sequence
             ref_text = prob['problem'] + prob['outputs'][0] # Use first rollout
             input_ids = self.tokenizer.encode(ref_text, return_tensors='pt').to(self.device)
             
             # 1. Random Cutoff [8, 16]
-            max_idx = min(16, input_ids.shape[1] - 2)
-            if max_idx < 8: continue # Too short
+            seq_len = input_ids.shape[1]
+            if seq_len < 10: continue
+                
+            max_idx = min(16, seq_len - 2)
+            if max_idx < 8: continue
             
             cutoff_pos = random.randint(8, max_idx)
             
@@ -318,16 +325,25 @@ class RandomBaselineExperiment:
                 'patching': patch_res
             })
             
+            # Periodic Checkpoint
+            if (idx + 1) % checkpoint_interval == 0:
+                with open(checkpoint_file, 'w') as f:
+                    json.dump(all_results, f, indent=2)
+                log.info(f"Checkpointed {len(all_results)} results to {checkpoint_file}")
+            
         # Save aggregated
         with open(self.output_dir / "random_baseline_full.json", 'w') as f:
             json.dump(all_results, f, indent=2)
+            
+        # Clean up partial
+        if checkpoint_file.exists():
+            checkpoint_file.unlink()
             
         # Compute minimal stats for checking
         log.info("Analysis complete.")
         log.info(f"Saved {len(all_results)} entries to {self.output_dir / 'random_baseline_full.json'}")
 
 if __name__ == "__main__":
-    import argparse
     parser = argparse.ArgumentParser(description="Run Random Baseline Analysis")
     parser.add_argument("--config", type=str, 
                        default="configs/mech_interp/dla_patching_config.yaml",
