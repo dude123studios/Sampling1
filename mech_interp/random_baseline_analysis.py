@@ -143,7 +143,8 @@ class RandomBaselineExperiment:
             else:
                 delta_z = z_curr - prev_z
                 
-            dla_scores[layer_idx] = torch.dot(u.float(), delta_z).item()
+            # Ensure 1D for dot product
+            dla_scores[layer_idx] = torch.dot(u.flatten().float(), delta_z.flatten()).item()
             prev_z = z_curr
             
         return dla_scores
