@@ -123,9 +123,10 @@ class TokenImpactExperiment:
 
         # Hook to capture activations
         def hook_fn(layer_idx):
+            def hook(module, input, output):
                 # output[0] is hidden states
                 hidden = output[0]
-                
+
                 # Check dimensions to avoid IndexError
                 if len(hidden.shape) == 3:
                     # [batch, seq, hidden]
