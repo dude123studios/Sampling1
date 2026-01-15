@@ -79,6 +79,10 @@ class RandomBaselineExperiment:
         if sweep_dir.exists():
             # Use rglob to find log.jsonl in any subdirectory
             for log_file in sweep_dir.rglob("log.jsonl"):
+                # Filter for temperature 0.6
+                if "temp0.6" not in str(log_file):
+                    continue
+                    
                 log.info(f"Found log file: {log_file}")
                 with open(log_file, 'r') as f:
                     for line in f:

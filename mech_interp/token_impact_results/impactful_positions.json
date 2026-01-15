@@ -1,0 +1,672 @@
+{
+  "test/intermediate_algebra/1994.json": [
+    40,
+    64,
+    8
+  ],
+  "test/precalculus/990.json": [
+    8,
+    24,
+    56
+  ],
+  "test/algebra/1837.json": [
+    8,
+    32,
+    48
+  ],
+  "test/algebra/2427.json": [
+    16,
+    24,
+    40
+  ],
+  "test/algebra/2193.json": [
+    16,
+    8,
+    64
+  ],
+  "test/number_theory/737.json": [
+    8,
+    64,
+    24
+  ],
+  "test/intermediate_algebra/1388.json": [
+    8,
+    64,
+    24
+  ],
+  "test/intermediate_algebra/1197.json": [
+    8,
+    32,
+    16
+  ],
+  "test/algebra/305.json": [
+    8,
+    40,
+    48
+  ],
+  "test/prealgebra/1558.json": [
+    16,
+    64,
+    32
+  ],
+  "test/prealgebra/951.json": [
+    56,
+    8,
+    64
+  ],
+  "test/precalculus/675.json": [
+    8,
+    32,
+    16
+  ],
+  "test/prealgebra/1139.json": [
+    8,
+    48,
+    16
+  ],
+  "test/intermediate_algebra/956.json": [
+    24,
+    32,
+    16
+  ],
+  "test/intermediate_algebra/279.json": [
+    16,
+    56,
+    40
+  ],
+  "test/number_theory/1055.json": [
+    8,
+    32,
+    48
+  ],
+  "test/counting_and_probability/525.json": [
+    56,
+    8,
+    24
+  ],
+  "test/intermediate_algebra/1454.json": [
+    8,
+    24,
+    64
+  ],
+  "test/intermediate_algebra/1849.json": [
+    24,
+    8,
+    40
+  ],
+  "test/algebra/2700.json": [
+    8,
+    24,
+    40
+  ],
+  "test/geometry/183.json": [
+    8,
+    32,
+    48
+  ],
+  "test/intermediate_algebra/662.json": [
+    8,
+    32,
+    40
+  ],
+  "test/precalculus/44.json": [
+    56,
+    8,
+    16
+  ],
+  "test/intermediate_algebra/558.json": [
+    8,
+    24,
+    64
+  ],
+  "test/algebra/892.json": [
+    32,
+    8,
+    40
+  ],
+  "test/prealgebra/1297.json": [
+    8,
+    40,
+    24
+  ],
+  "test/geometry/1140.json": [
+    8,
+    32,
+    16
+  ],
+  "test/intermediate_algebra/2022.json": [
+    56,
+    8,
+    64
+  ],
+  "test/intermediate_algebra/582.json": [
+    32,
+    56,
+    24
+  ],
+  "test/counting_and_probability/159.json": [
+    16,
+    32,
+    8
+  ],
+  "test/precalculus/986.json": [
+    8,
+    48,
+    24
+  ],
+  "test/intermediate_algebra/232.json": [
+    48,
+    24,
+    8
+  ],
+  "test/geometry/880.json": [
+    8,
+    40,
+    32
+  ],
+  "test/prealgebra/1646.json": [
+    40,
+    8,
+    48
+  ],
+  "test/intermediate_algebra/964.json": [
+    8,
+    16,
+    64
+  ],
+  "test/algebra/2517.json": [
+    8,
+    24,
+    32
+  ],
+  "test/prealgebra/1655.json": [
+    8,
+    16,
+    40
+  ],
+  "test/intermediate_algebra/1408.json": [
+    8,
+    16,
+    64
+  ],
+  "test/intermediate_algebra/966.json": [
+    8,
+    16,
+    56
+  ],
+  "test/geometry/172.json": [
+    8,
+    40,
+    48
+  ],
+  "test/algebra/686.json": [
+    32,
+    48,
+    8
+  ],
+  "test/counting_and_probability/51.json": [
+    8,
+    48,
+    64
+  ],
+  "test/algebra/733.json": [
+    8,
+    48,
+    24
+  ],
+  "test/counting_and_probability/181.json": [
+    16,
+    8,
+    24
+  ],
+  "test/algebra/297.json": [
+    16,
+    24,
+    8
+  ],
+  "test/intermediate_algebra/2196.json": [
+    8,
+    16,
+    56
+  ],
+  "test/number_theory/838.json": [
+    8,
+    40,
+    24
+  ],
+  "test/intermediate_algebra/183.json": [
+    8,
+    32,
+    24
+  ],
+  "test/geometry/702.json": [
+    32,
+    16,
+    8
+  ],
+  "test/algebra/291.json": [
+    8,
+    16,
+    40
+  ],
+  "test/prealgebra/1003.json": [
+    8,
+    16,
+    56
+  ],
+  "test/prealgebra/1961.json": [
+    24,
+    16,
+    8
+  ],
+  "test/counting_and_probability/765.json": [
+    16,
+    24,
+    40
+  ],
+  "test/algebra/975.json": [
+    8,
+    56,
+    64
+  ],
+  "test/geometry/229.json": [
+    56,
+    32,
+    8
+  ],
+  "test/intermediate_algebra/1510.json": [
+    8,
+    40,
+    16
+  ],
+  "test/algebra/2064.json": [
+    16,
+    24,
+    8
+  ],
+  "test/prealgebra/1251.json": [
+    8,
+    64,
+    40
+  ],
+  "test/counting_and_probability/1009.json": [
+    16,
+    8,
+    32
+  ],
+  "test/algebra/1143.json": [
+    32,
+    16,
+    8
+  ],
+  "test/intermediate_algebra/1354.json": [
+    32,
+    56,
+    48
+  ],
+  "test/counting_and_probability/894.json": [
+    16,
+    32,
+    8
+  ],
+  "test/geometry/826.json": [
+    8,
+    16,
+    40
+  ],
+  "test/algebra/2626.json": [
+    64,
+    8,
+    24
+  ],
+  "test/algebra/1282.json": [
+    8,
+    24,
+    16
+  ],
+  "test/prealgebra/1512.json": [
+    24,
+    16,
+    8
+  ],
+  "test/geometry/686.json": [
+    32,
+    8,
+    40
+  ],
+  "test/number_theory/631.json": [
+    16,
+    24,
+    32
+  ],
+  "test/algebra/2486.json": [
+    56,
+    40,
+    16
+  ],
+  "test/precalculus/1172.json": [
+    32,
+    8,
+    16
+  ],
+  "test/intermediate_algebra/960.json": [
+    48,
+    40,
+    8
+  ],
+  "test/prealgebra/1423.json": [
+    8,
+    56,
+    40
+  ],
+  "test/precalculus/768.json": [
+    8,
+    64,
+    40
+  ],
+  "test/geometry/965.json": [
+    24,
+    48,
+    8
+  ],
+  "test/intermediate_algebra/1544.json": [
+    8,
+    32,
+    16
+  ],
+  "test/prealgebra/1044.json": [
+    8,
+    16,
+    48
+  ],
+  "test/prealgebra/954.json": [
+    8,
+    32,
+    24
+  ],
+  "test/geometry/711.json": [
+    8,
+    24,
+    64
+  ],
+  "test/intermediate_algebra/2152.json": [
+    8,
+    16,
+    40
+  ],
+  "test/geometry/947.json": [
+    16,
+    40,
+    8
+  ],
+  "test/algebra/2176.json": [
+    8,
+    32,
+    56
+  ],
+  "test/counting_and_probability/870.json": [
+    8,
+    32,
+    24
+  ],
+  "test/intermediate_algebra/117.json": [
+    40,
+    16,
+    48
+  ],
+  "test/algebra/509.json": [
+    16,
+    40,
+    24
+  ],
+  "test/counting_and_probability/216.json": [
+    48,
+    16,
+    32
+  ],
+  "test/prealgebra/1353.json": [
+    8,
+    40,
+    56
+  ],
+  "test/algebra/1078.json": [
+    8,
+    32,
+    16
+  ],
+  "test/intermediate_algebra/1166.json": [
+    8,
+    24,
+    16
+  ],
+  "test/intermediate_algebra/955.json": [
+    16,
+    56,
+    8
+  ],
+  "test/algebra/2264.json": [
+    32,
+    8,
+    16
+  ],
+  "test/number_theory/427.json": [
+    8,
+    56,
+    16
+  ],
+  "test/number_theory/820.json": [
+    16,
+    24,
+    8
+  ],
+  "test/prealgebra/2066.json": [
+    32,
+    16,
+    8
+  ],
+  "test/algebra/1031.json": [
+    16,
+    24,
+    32
+  ],
+  "test/counting_and_probability/188.json": [
+    8,
+    16,
+    56
+  ],
+  "test/precalculus/902.json": [
+    32,
+    8,
+    16
+  ],
+  "test/intermediate_algebra/1111.json": [
+    8,
+    24,
+    32
+  ],
+  "test/algebra/853.json": [
+    8,
+    16,
+    32
+  ],
+  "test/precalculus/398.json": [
+    24,
+    16,
+    56
+  ],
+  "test/intermediate_algebra/1791.json": [
+    8,
+    56,
+    40
+  ],
+  "test/geometry/817.json": [
+    8,
+    16,
+    40
+  ],
+  "test/algebra/776.json": [
+    16,
+    40,
+    8
+  ],
+  "test/algebra/2277.json": [
+    16,
+    8,
+    32
+  ],
+  "test/algebra/1339.json": [
+    8,
+    48,
+    64
+  ],
+  "test/algebra/2043.json": [
+    24,
+    8,
+    56
+  ],
+  "test/precalculus/1133.json": [
+    8,
+    16,
+    24
+  ],
+  "test/number_theory/769.json": [
+    16,
+    8,
+    64
+  ],
+  "test/prealgebra/1640.json": [
+    16,
+    8,
+    40
+  ],
+  "test/number_theory/1002.json": [
+    8,
+    48,
+    40
+  ],
+  "test/intermediate_algebra/1462.json": [
+    16,
+    32,
+    8
+  ],
+  "test/precalculus/1202.json": [
+    32,
+    16,
+    56
+  ],
+  "test/number_theory/13.json": [
+    24,
+    16,
+    56
+  ],
+  "test/algebra/1796.json": [
+    16,
+    8,
+    24
+  ],
+  "test/intermediate_algebra/1806.json": [
+    16,
+    8,
+    24
+  ],
+  "test/number_theory/1000.json": [
+    16,
+    8,
+    40
+  ],
+  "test/counting_and_probability/731.json": [
+    16,
+    8,
+    32
+  ],
+  "test/algebra/2780.json": [
+    40,
+    16,
+    8
+  ],
+  "test/precalculus/703.json": [
+    16,
+    40,
+    32
+  ],
+  "test/prealgebra/1930.json": [
+    16,
+    40,
+    64
+  ],
+  "test/prealgebra/1203.json": [
+    8,
+    16,
+    40
+  ],
+  "test/precalculus/323.json": [
+    8,
+    56,
+    24
+  ],
+  "test/number_theory/1128.json": [
+    16,
+    48,
+    8
+  ],
+  "test/counting_and_probability/1003.json": [
+    8,
+    32,
+    24
+  ],
+  "test/intermediate_algebra/1279.json": [
+    64,
+    8,
+    24
+  ],
+  "test/intermediate_algebra/2015.json": [
+    16,
+    24,
+    8
+  ],
+  "test/number_theory/1090.json": [
+    8,
+    40,
+    48
+  ],
+  "test/intermediate_algebra/158.json": [
+    8,
+    16,
+    48
+  ],
+  "test/intermediate_algebra/1467.json": [
+    48,
+    56,
+    16
+  ],
+  "test/intermediate_algebra/1350.json": [
+    8,
+    16,
+    40
+  ],
+  "test/prealgebra/1128.json": [
+    40,
+    8,
+    56
+  ],
+  "test/algebra/2779.json": [
+    48,
+    32,
+    24
+  ],
+  "test/intermediate_algebra/1508.json": [
+    32,
+    16,
+    64
+  ],
+  "test/geometry/561.json": [
+    16,
+    8,
+    56
+  ],
+  "test/intermediate_algebra/1930.json": [
+    8,
+    32,
+    56
+  ]
+}
