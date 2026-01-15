@@ -1,0 +1,1610 @@
+[
+  {
+    "problem_id": "test/number_theory/737.json",
+    "cutoff_pos": 9,
+    "top1_token": 41214,
+    "top2_token": 436,
+    "gradient": {
+      "15": 2.935546875,
+      "20": 2.2734375,
+      "25": 1.615234375,
+      "31": 0.78955078125
+    }
+  },
+  {
+    "problem_id": "test/algebra/1837.json",
+    "cutoff_pos": 13,
+    "top1_token": 13,
+    "top2_token": 382,
+    "gradient": {
+      "15": 0.38671875,
+      "20": 0.283447265625,
+      "25": 0.15673828125,
+      "31": 0.0826416015625
+    }
+  },
+  {
+    "problem_id": "test/algebra/2193.json",
+    "cutoff_pos": 11,
+    "top1_token": 17,
+    "top2_token": 18,
+    "gradient": {
+      "15": 0.395263671875,
+      "20": 0.380126953125,
+      "25": 0.2110595703125,
+      "31": 0.06671142578125
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1139.json",
+    "cutoff_pos": 12,
+    "top1_token": 279,
+    "top2_token": 264,
+    "gradient": {
+      "15": 1.2265625,
+      "20": 0.69189453125,
+      "25": 0.308349609375,
+      "31": 0.1102294921875
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1558.json",
+    "cutoff_pos": 14,
+    "top1_token": 220,
+    "top2_token": 304,
+    "gradient": {
+      "15": 1.4072265625,
+      "20": 1.1474609375,
+      "25": 0.6611328125,
+      "31": 0.2120361328125
+    }
+  },
+  {
+    "problem_id": "test/algebra/305.json",
+    "cutoff_pos": 12,
+    "top1_token": 369,
+    "top2_token": 315,
+    "gradient": {
+      "15": 0.501953125,
+      "20": 0.4296875,
+      "25": 0.296630859375,
+      "31": 0.08642578125
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1388.json",
+    "cutoff_pos": 10,
+    "top1_token": 488,
+    "top2_token": 284,
+    "gradient": {
+      "15": 0.7646484375,
+      "20": 0.671875,
+      "25": 0.39013671875,
+      "31": 0.1068115234375
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1197.json",
+    "cutoff_pos": 16,
+    "top1_token": 7,
+    "top2_token": 2075,
+    "gradient": {
+      "15": 1.0205078125,
+      "20": 0.86767578125,
+      "25": 0.409912109375,
+      "31": 0.10400390625
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1994.json",
+    "cutoff_pos": 8,
+    "top1_token": 15159,
+    "top2_token": 315,
+    "gradient": {
+      "15": 0.64306640625,
+      "20": 0.51416015625,
+      "25": 0.275634765625,
+      "31": 0.1279296875
+    }
+  },
+  {
+    "problem_id": "test/algebra/2427.json",
+    "cutoff_pos": 15,
+    "top1_token": 264,
+    "top2_token": 458,
+    "gradient": {
+      "15": 1.1640625,
+      "20": 0.7216796875,
+      "25": 0.37744140625,
+      "31": 0.14404296875
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1454.json",
+    "cutoff_pos": 15,
+    "top1_token": 220,
+    "top2_token": 51745,
+    "gradient": {
+      "15": 0.62060546875,
+      "20": 0.59375,
+      "25": 0.408447265625,
+      "31": 0.1251220703125
+    }
+  },
+  {
+    "problem_id": "test/precalculus/990.json",
+    "cutoff_pos": 12,
+    "top1_token": 553,
+    "top2_token": 284,
+    "gradient": {
+      "15": 0.87890625,
+      "20": 0.78076171875,
+      "25": 0.454833984375,
+      "31": 0.134033203125
+    }
+  },
+  {
+    "problem_id": "test/counting_and_probability/525.json",
+    "cutoff_pos": 13,
+    "top1_token": 26931,
+    "top2_token": 1965,
+    "gradient": {
+      "15": 1.00390625,
+      "20": 0.92236328125,
+      "25": 0.64208984375,
+      "31": 0.27587890625
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/951.json",
+    "cutoff_pos": 10,
+    "top1_token": 92,
+    "top2_token": 3417,
+    "gradient": {
+      "15": 0.81396484375,
+      "20": 0.70361328125,
+      "25": 0.382568359375,
+      "31": 0.1275634765625
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/279.json",
+    "cutoff_pos": 11,
+    "top1_token": 16,
+    "top2_token": 17,
+    "gradient": {
+      "15": 0.1259765625,
+      "20": 0.08856201171875,
+      "25": 0.051239013671875,
+      "31": 0.026947021484375
+    }
+  },
+  {
+    "problem_id": "test/number_theory/1055.json",
+    "cutoff_pos": 11,
+    "top1_token": 421,
+    "top2_token": 304,
+    "gradient": {
+      "15": 2.05078125,
+      "20": 1.298828125,
+      "25": 0.61865234375,
+      "31": 0.161376953125
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/956.json",
+    "cutoff_pos": 9,
+    "top1_token": 488,
+    "top2_token": 481,
+    "gradient": {
+      "15": 0.460205078125,
+      "20": 0.4580078125,
+      "25": 0.307861328125,
+      "31": 0.0859375
+    }
+  },
+  {
+    "problem_id": "test/precalculus/675.json",
+    "cutoff_pos": 14,
+    "top1_token": 17767,
+    "top2_token": 362,
+    "gradient": {
+      "15": 0.6953125,
+      "20": 0.4755859375,
+      "25": 0.30810546875,
+      "31": 0.137451171875
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1849.json",
+    "cutoff_pos": 14,
+    "top1_token": 323,
+    "top2_token": 15,
+    "gradient": {
+      "15": 0.646484375,
+      "20": 0.5048828125,
+      "25": 0.3134765625,
+      "31": 0.12432861328125
+    }
+  },
+  {
+    "problem_id": "test/algebra/892.json",
+    "cutoff_pos": 12,
+    "top1_token": 59,
+    "top2_token": 1124,
+    "gradient": {
+      "15": 4.41796875,
+      "20": 3.603515625,
+      "25": 2.07421875,
+      "31": 0.63232421875
+    }
+  },
+  {
+    "problem_id": "test/algebra/2700.json",
+    "cutoff_pos": 8,
+    "top1_token": 389,
+    "top2_token": 3403,
+    "gradient": {
+      "15": 1.537109375,
+      "20": 1.3515625,
+      "25": 0.8017578125,
+      "31": 0.29248046875
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/558.json",
+    "cutoff_pos": 16,
+    "top1_token": 264,
+    "top2_token": 458,
+    "gradient": {
+      "15": 0.265625,
+      "20": 0.250732421875,
+      "25": 0.196533203125,
+      "31": 0.10565185546875
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1646.json",
+    "cutoff_pos": 9,
+    "top1_token": 304,
+    "top2_token": 323,
+    "gradient": {
+      "15": 0.79052734375,
+      "20": 0.64892578125,
+      "25": 0.252197265625,
+      "31": 0.10406494140625
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/582.json",
+    "cutoff_pos": 16,
+    "top1_token": 87,
+    "top2_token": 481,
+    "gradient": {
+      "15": 3.13671875,
+      "20": 2.45703125,
+      "25": 1.205078125,
+      "31": 0.228515625
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1297.json",
+    "cutoff_pos": 8,
+    "top1_token": 518,
+    "top2_token": 304,
+    "gradient": {
+      "15": 0.8037109375,
+      "20": 0.71875,
+      "25": 0.492431640625,
+      "31": 0.146240234375
+    }
+  },
+  {
+    "problem_id": "test/precalculus/44.json",
+    "cutoff_pos": 9,
+    "top1_token": 6785,
+    "top2_token": 3204,
+    "gradient": {
+      "15": 1.96875,
+      "20": 1.7490234375,
+      "25": 1.1787109375,
+      "31": 0.369873046875
+    }
+  },
+  {
+    "problem_id": "test/geometry/183.json",
+    "cutoff_pos": 14,
+    "top1_token": 13,
+    "top2_token": 3491,
+    "gradient": {
+      "15": 0.6904296875,
+      "20": 0.5244140625,
+      "25": 0.29345703125,
+      "31": 0.10821533203125
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/662.json",
+    "cutoff_pos": 8,
+    "top1_token": 25,
+    "top2_token": 1172,
+    "gradient": {
+      "15": 0.81884765625,
+      "20": 0.68017578125,
+      "25": 0.33251953125,
+      "31": 0.11456298828125
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/232.json",
+    "cutoff_pos": 12,
+    "top1_token": 8,
+    "top2_token": 11,
+    "gradient": {
+      "15": 1.009765625,
+      "20": 0.66064453125,
+      "25": 0.326171875,
+      "31": 0.13037109375
+    }
+  },
+  {
+    "problem_id": "test/geometry/1140.json",
+    "cutoff_pos": 12,
+    "top1_token": 284,
+    "top2_token": 28,
+    "gradient": {
+      "15": 0.92041015625,
+      "20": 0.806640625,
+      "25": 0.505859375,
+      "31": 0.2352294921875
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/964.json",
+    "cutoff_pos": 15,
+    "top1_token": 729,
+    "top2_token": 30819,
+    "gradient": {
+      "15": 0.66845703125,
+      "20": 0.54833984375,
+      "25": 0.3525390625,
+      "31": 0.1856689453125
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/966.json",
+    "cutoff_pos": 15,
+    "top1_token": 1931,
+    "top2_token": 25780,
+    "gradient": {
+      "15": 0.59228515625,
+      "20": 0.4697265625,
+      "25": 0.364013671875,
+      "31": 0.14501953125
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1408.json",
+    "cutoff_pos": 15,
+    "top1_token": 17767,
+    "top2_token": 369,
+    "gradient": {
+      "15": 1.4091796875,
+      "20": 1.0419921875,
+      "25": 0.47509765625,
+      "31": 0.1341552734375
+    }
+  },
+  {
+    "problem_id": "test/precalculus/986.json",
+    "cutoff_pos": 15,
+    "top1_token": 11,
+    "top2_token": 28675,
+    "gradient": {
+      "15": 0.63232421875,
+      "20": 0.5654296875,
+      "25": 0.299072265625,
+      "31": 0.1650390625
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/2022.json",
+    "cutoff_pos": 16,
+    "top1_token": 2629,
+    "top2_token": 8500,
+    "gradient": {
+      "15": 1.16015625,
+      "20": 0.84228515625,
+      "25": 0.3837890625,
+      "31": 0.11541748046875
+    }
+  },
+  {
+    "problem_id": "test/geometry/880.json",
+    "cutoff_pos": 13,
+    "top1_token": 11466,
+    "top2_token": 6573,
+    "gradient": {
+      "15": 2.328125,
+      "20": 1.939453125,
+      "25": 1.341796875,
+      "31": 0.546875
+    }
+  },
+  {
+    "problem_id": "test/geometry/172.json",
+    "cutoff_pos": 8,
+    "top1_token": 614,
+    "top2_token": 525,
+    "gradient": {
+      "15": 0.677734375,
+      "20": 0.5634765625,
+      "25": 0.338623046875,
+      "31": 0.1239013671875
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1655.json",
+    "cutoff_pos": 11,
+    "top1_token": 220,
+    "top2_token": 279,
+    "gradient": {
+      "15": 0.74609375,
+      "20": 0.619140625,
+      "25": 0.386962890625,
+      "31": 0.126708984375
+    }
+  },
+  {
+    "problem_id": "test/algebra/297.json",
+    "cutoff_pos": 10,
+    "top1_token": 315,
+    "top2_token": 1380,
+    "gradient": {
+      "15": 2.873046875,
+      "20": 1.7119140625,
+      "25": 0.7626953125,
+      "31": 0.1798095703125
+    }
+  },
+  {
+    "problem_id": "test/algebra/686.json",
+    "cutoff_pos": 9,
+    "top1_token": 37018,
+    "top2_token": 26888,
+    "gradient": {
+      "15": 0.67333984375,
+      "20": 0.65673828125,
+      "25": 0.5986328125,
+      "31": 0.26416015625
+    }
+  },
+  {
+    "problem_id": "test/algebra/2517.json",
+    "cutoff_pos": 13,
+    "top1_token": 220,
+    "top2_token": 481,
+    "gradient": {
+      "15": 0.6494140625,
+      "20": 0.59228515625,
+      "25": 0.276123046875,
+      "31": 0.0775146484375
+    }
+  },
+  {
+    "problem_id": "test/counting_and_probability/159.json",
+    "cutoff_pos": 11,
+    "top1_token": 20,
+    "top2_token": 19,
+    "gradient": {
+      "15": 1.31640625,
+      "20": 1.228515625,
+      "25": 0.65234375,
+      "31": 0.1763916015625
+    }
+  },
+  {
+    "problem_id": "test/algebra/733.json",
+    "cutoff_pos": 12,
+    "top1_token": 2075,
+    "top2_token": 323,
+    "gradient": {
+      "15": 0.875,
+      "20": 0.728515625,
+      "25": 0.448974609375,
+      "31": 0.1234130859375
+    }
+  },
+  {
+    "problem_id": "test/counting_and_probability/765.json",
+    "cutoff_pos": 8,
+    "top1_token": 13866,
+    "top2_token": 2176,
+    "gradient": {
+      "15": 1.06640625,
+      "20": 0.90185546875,
+      "25": 0.471923828125,
+      "31": 0.180419921875
+    }
+  },
+  {
+    "problem_id": "test/counting_and_probability/181.json",
+    "cutoff_pos": 12,
+    "top1_token": 35,
+    "top2_token": 87,
+    "gradient": {
+      "15": 0.75830078125,
+      "20": 0.640625,
+      "25": 0.52099609375,
+      "31": 0.1959228515625
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1510.json",
+    "cutoff_pos": 15,
+    "top1_token": 279,
+    "top2_token": 264,
+    "gradient": {
+      "15": 0.90087890625,
+      "20": 0.77685546875,
+      "25": 0.5205078125,
+      "31": 0.14794921875
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/183.json",
+    "cutoff_pos": 9,
+    "top1_token": 315,
+    "top2_token": 369,
+    "gradient": {
+      "15": 0.497314453125,
+      "20": 0.4375,
+      "25": 0.3134765625,
+      "31": 0.09014892578125
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1003.json",
+    "cutoff_pos": 15,
+    "top1_token": 13,
+    "top2_token": 11,
+    "gradient": {
+      "15": 0.4658203125,
+      "20": 0.3740234375,
+      "25": 0.1798095703125,
+      "31": 0.09503173828125
+    }
+  },
+  {
+    "problem_id": "test/number_theory/838.json",
+    "cutoff_pos": 16,
+    "top1_token": 374,
+    "top2_token": 64828,
+    "gradient": {
+      "15": 1.140625,
+      "20": 0.77685546875,
+      "25": 0.41650390625,
+      "31": 0.13330078125
+    }
+  },
+  {
+    "problem_id": "test/counting_and_probability/51.json",
+    "cutoff_pos": 8,
+    "top1_token": 315,
+    "top2_token": 374,
+    "gradient": {
+      "15": 1.0263671875,
+      "20": 0.84130859375,
+      "25": 0.47509765625,
+      "31": 0.14501953125
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/2196.json",
+    "cutoff_pos": 15,
+    "top1_token": 488,
+    "top2_token": 61,
+    "gradient": {
+      "15": 1.44921875,
+      "20": 0.94287109375,
+      "25": 0.45068359375,
+      "31": 0.1173095703125
+    }
+  },
+  {
+    "problem_id": "test/algebra/1143.json",
+    "cutoff_pos": 16,
+    "top1_token": 1459,
+    "top2_token": 1555,
+    "gradient": {
+      "15": 0.736328125,
+      "20": 0.60546875,
+      "25": 0.37109375,
+      "31": 0.123046875
+    }
+  },
+  {
+    "problem_id": "test/geometry/702.json",
+    "cutoff_pos": 15,
+    "top1_token": 304,
+    "top2_token": 448,
+    "gradient": {
+      "15": 1.142578125,
+      "20": 0.693359375,
+      "25": 0.32763671875,
+      "31": 0.0823974609375
+    }
+  },
+  {
+    "problem_id": "test/algebra/2064.json",
+    "cutoff_pos": 16,
+    "top1_token": 87,
+    "top2_token": 88,
+    "gradient": {
+      "15": 2.0,
+      "20": 1.46875,
+      "25": 0.66796875,
+      "31": 0.126220703125
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1251.json",
+    "cutoff_pos": 16,
+    "top1_token": 825,
+    "top2_token": 1378,
+    "gradient": {
+      "15": 2.73828125,
+      "20": 2.138671875,
+      "25": 1.2177734375,
+      "31": 0.36083984375
+    }
+  },
+  {
+    "problem_id": "test/algebra/975.json",
+    "cutoff_pos": 9,
+    "top1_token": 220,
+    "top2_token": 715,
+    "gradient": {
+      "15": 0.5048828125,
+      "20": 0.39794921875,
+      "25": 0.220703125,
+      "31": 0.0953369140625
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1961.json",
+    "cutoff_pos": 11,
+    "top1_token": 264,
+    "top2_token": 220,
+    "gradient": {
+      "15": 0.34130859375,
+      "20": 0.31787109375,
+      "25": 0.221435546875,
+      "31": 0.0909423828125
+    }
+  },
+  {
+    "problem_id": "test/counting_and_probability/1009.json",
+    "cutoff_pos": 9,
+    "top1_token": 5157,
+    "top2_token": 30893,
+    "gradient": {
+      "15": 0.8291015625,
+      "20": 0.76904296875,
+      "25": 0.494384765625,
+      "31": 0.1929931640625
+    }
+  },
+  {
+    "problem_id": "test/algebra/291.json",
+    "cutoff_pos": 16,
+    "top1_token": 807,
+    "top2_token": 279,
+    "gradient": {
+      "15": 0.432861328125,
+      "20": 0.347900390625,
+      "25": 0.1636962890625,
+      "31": 0.07086181640625
+    }
+  },
+  {
+    "problem_id": "test/counting_and_probability/894.json",
+    "cutoff_pos": 10,
+    "top1_token": 311,
+    "top2_token": 518,
+    "gradient": {
+      "15": 1.7734375,
+      "20": 1.1396484375,
+      "25": 0.6767578125,
+      "31": 0.194580078125
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1354.json",
+    "cutoff_pos": 8,
+    "top1_token": 24,
+    "top2_token": 284,
+    "gradient": {
+      "15": 2.39453125,
+      "20": 1.4072265625,
+      "25": 0.8623046875,
+      "31": 0.218994140625
+    }
+  },
+  {
+    "problem_id": "test/geometry/229.json",
+    "cutoff_pos": 13,
+    "top1_token": 358,
+    "top2_token": 862,
+    "gradient": {
+      "15": 0.8681640625,
+      "20": 0.68701171875,
+      "25": 0.299560546875,
+      "31": 0.1153564453125
+    }
+  },
+  {
+    "problem_id": "test/algebra/2626.json",
+    "cutoff_pos": 15,
+    "top1_token": 369,
+    "top2_token": 518,
+    "gradient": {
+      "15": 0.72900390625,
+      "20": 0.67529296875,
+      "25": 0.489990234375,
+      "31": 0.1376953125
+    }
+  },
+  {
+    "problem_id": "test/geometry/686.json",
+    "cutoff_pos": 10,
+    "top1_token": 374,
+    "top2_token": 17167,
+    "gradient": {
+      "15": 0.38671875,
+      "20": 0.31201171875,
+      "25": 0.20458984375,
+      "31": 0.10076904296875
+    }
+  },
+  {
+    "problem_id": "test/geometry/826.json",
+    "cutoff_pos": 9,
+    "top1_token": 21495,
+    "top2_token": 17047,
+    "gradient": {
+      "15": 1.19140625,
+      "20": 0.86572265625,
+      "25": 0.444091796875,
+      "31": 0.1708984375
+    }
+  },
+  {
+    "problem_id": "test/algebra/2486.json",
+    "cutoff_pos": 16,
+    "top1_token": 18,
+    "top2_token": 17,
+    "gradient": {
+      "15": 0.2081298828125,
+      "20": 0.1265869140625,
+      "25": 0.08380126953125,
+      "31": 0.040771484375
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1512.json",
+    "cutoff_pos": 8,
+    "top1_token": 72,
+    "top2_token": 685,
+    "gradient": {
+      "15": 1.498046875,
+      "20": 1.3798828125,
+      "25": 1.111328125,
+      "31": 0.57275390625
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/960.json",
+    "cutoff_pos": 12,
+    "top1_token": 8402,
+    "top2_token": 11,
+    "gradient": {
+      "15": 0.63037109375,
+      "20": 0.56201171875,
+      "25": 0.403564453125,
+      "31": 0.171630859375
+    }
+  },
+  {
+    "problem_id": "test/precalculus/1172.json",
+    "cutoff_pos": 11,
+    "top1_token": 1184,
+    "top2_token": 2776,
+    "gradient": {
+      "15": 0.63623046875,
+      "20": 0.54052734375,
+      "25": 0.332763671875,
+      "31": 0.145263671875
+    }
+  },
+  {
+    "problem_id": "test/precalculus/768.json",
+    "cutoff_pos": 8,
+    "top1_token": 7,
+    "top2_token": 11520,
+    "gradient": {
+      "15": 0.57958984375,
+      "20": 0.53369140625,
+      "25": 0.386474609375,
+      "31": 0.1434326171875
+    }
+  },
+  {
+    "problem_id": "test/geometry/711.json",
+    "cutoff_pos": 15,
+    "top1_token": 13,
+    "top2_token": 11,
+    "gradient": {
+      "15": 0.328369140625,
+      "20": 0.32421875,
+      "25": 0.2119140625,
+      "31": 0.0885009765625
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1423.json",
+    "cutoff_pos": 9,
+    "top1_token": 315,
+    "top2_token": 17767,
+    "gradient": {
+      "15": 1.166015625,
+      "20": 0.79736328125,
+      "25": 0.42236328125,
+      "31": 0.164794921875
+    }
+  },
+  {
+    "problem_id": "test/number_theory/631.json",
+    "cutoff_pos": 9,
+    "top1_token": 20332,
+    "top2_token": 9331,
+    "gradient": {
+      "15": 0.75390625,
+      "20": 0.63037109375,
+      "25": 0.388916015625,
+      "31": 0.1845703125
+    }
+  },
+  {
+    "problem_id": "test/algebra/1282.json",
+    "cutoff_pos": 16,
+    "top1_token": 1124,
+    "top2_token": 282,
+    "gradient": {
+      "15": 0.50634765625,
+      "20": 0.46435546875,
+      "25": 0.332275390625,
+      "31": 0.1361083984375
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1044.json",
+    "cutoff_pos": 14,
+    "top1_token": 13,
+    "top2_token": 11,
+    "gradient": {
+      "15": 0.91162109375,
+      "20": 0.638671875,
+      "25": 0.298583984375,
+      "31": 0.154052734375
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1544.json",
+    "cutoff_pos": 10,
+    "top1_token": 1352,
+    "top2_token": 943,
+    "gradient": {
+      "15": 1.3603515625,
+      "20": 1.150390625,
+      "25": 0.8310546875,
+      "31": 0.322265625
+    }
+  },
+  {
+    "problem_id": "test/geometry/965.json",
+    "cutoff_pos": 16,
+    "top1_token": 448,
+    "top2_token": 1380,
+    "gradient": {
+      "15": 0.498779296875,
+      "20": 0.50146484375,
+      "25": 0.381591796875,
+      "31": 0.142822265625
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/954.json",
+    "cutoff_pos": 14,
+    "top1_token": 20408,
+    "top2_token": 12958,
+    "gradient": {
+      "15": 1.5810546875,
+      "20": 1.35546875,
+      "25": 0.9677734375,
+      "31": 0.409912109375
+    }
+  },
+  {
+    "problem_id": "test/counting_and_probability/870.json",
+    "cutoff_pos": 15,
+    "top1_token": 11882,
+    "top2_token": 9099,
+    "gradient": {
+      "15": 0.52099609375,
+      "20": 0.4697265625,
+      "25": 0.35693359375,
+      "31": 0.1435546875
+    }
+  },
+  {
+    "problem_id": "test/geometry/947.json",
+    "cutoff_pos": 14,
+    "top1_token": 431,
+    "top2_token": 1207,
+    "gradient": {
+      "15": 0.546875,
+      "20": 0.53369140625,
+      "25": 0.43212890625,
+      "31": 0.181396484375
+    }
+  },
+  {
+    "problem_id": "test/counting_and_probability/216.json",
+    "cutoff_pos": 12,
+    "top1_token": 3613,
+    "top2_token": 504,
+    "gradient": {
+      "15": 0.63916015625,
+      "20": 0.53271484375,
+      "25": 0.377197265625,
+      "31": 0.12493896484375
+    }
+  },
+  {
+    "problem_id": "test/algebra/509.json",
+    "cutoff_pos": 16,
+    "top1_token": 90,
+    "top2_token": 35702,
+    "gradient": {
+      "15": 0.6337890625,
+      "20": 0.54443359375,
+      "25": 0.3232421875,
+      "31": 0.1114501953125
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/2152.json",
+    "cutoff_pos": 9,
+    "top1_token": 11,
+    "top2_token": 323,
+    "gradient": {
+      "15": 0.998046875,
+      "20": 0.91845703125,
+      "25": 0.489013671875,
+      "31": 0.189208984375
+    }
+  },
+  {
+    "problem_id": "test/algebra/2176.json",
+    "cutoff_pos": 15,
+    "top1_token": 16,
+    "top2_token": 20,
+    "gradient": {
+      "15": 2.70703125,
+      "20": 2.23046875,
+      "25": 1.568359375,
+      "31": 0.426025390625
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/117.json",
+    "cutoff_pos": 12,
+    "top1_token": 8381,
+    "top2_token": 1496,
+    "gradient": {
+      "15": 1.009765625,
+      "20": 0.9912109375,
+      "25": 0.720703125,
+      "31": 0.2012939453125
+    }
+  },
+  {
+    "problem_id": "test/algebra/1078.json",
+    "cutoff_pos": 13,
+    "top1_token": 856,
+    "top2_token": 220,
+    "gradient": {
+      "15": 0.97900390625,
+      "20": 0.82177734375,
+      "25": 0.419189453125,
+      "31": 0.1453857421875
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1353.json",
+    "cutoff_pos": 14,
+    "top1_token": 1119,
+    "top2_token": 700,
+    "gradient": {
+      "15": 0.9580078125,
+      "20": 0.75390625,
+      "25": 0.495849609375,
+      "31": 0.1680908203125
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/955.json",
+    "cutoff_pos": 8,
+    "top1_token": 17767,
+    "top2_token": 279,
+    "gradient": {
+      "15": 0.52197265625,
+      "20": 0.41845703125,
+      "25": 0.248046875,
+      "31": 0.09710693359375
+    }
+  },
+  {
+    "problem_id": "test/algebra/1031.json",
+    "cutoff_pos": 11,
+    "top1_token": 315,
+    "top2_token": 508,
+    "gradient": {
+      "15": 1.3427734375,
+      "20": 0.73486328125,
+      "25": 0.392578125,
+      "31": 0.109619140625
+    }
+  },
+  {
+    "problem_id": "test/algebra/2277.json",
+    "cutoff_pos": 14,
+    "top1_token": 715,
+    "top2_token": 314,
+    "gradient": {
+      "15": 0.9013671875,
+      "20": 0.80419921875,
+      "25": 0.43408203125,
+      "31": 0.15966796875
+    }
+  },
+  {
+    "problem_id": "test/algebra/2264.json",
+    "cutoff_pos": 9,
+    "top1_token": 90,
+    "top2_token": 35702,
+    "gradient": {
+      "15": 0.73193359375,
+      "20": 0.5986328125,
+      "25": 0.375244140625,
+      "31": 0.1142578125
+    }
+  },
+  {
+    "problem_id": "test/number_theory/427.json",
+    "cutoff_pos": 16,
+    "top1_token": 315,
+    "top2_token": 11,
+    "gradient": {
+      "15": 1.6943359375,
+      "20": 1.2060546875,
+      "25": 0.58349609375,
+      "31": 0.20166015625
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1166.json",
+    "cutoff_pos": 10,
+    "top1_token": 17767,
+    "top2_token": 1124,
+    "gradient": {
+      "15": 0.343505859375,
+      "20": 0.2890625,
+      "25": 0.211669921875,
+      "31": 0.1048583984375
+    }
+  },
+  {
+    "problem_id": "test/number_theory/820.json",
+    "cutoff_pos": 16,
+    "top1_token": 525,
+    "top2_token": 26553,
+    "gradient": {
+      "15": 0.890625,
+      "20": 0.7109375,
+      "25": 0.4501953125,
+      "31": 0.1551513671875
+    }
+  },
+  {
+    "problem_id": "test/algebra/853.json",
+    "cutoff_pos": 9,
+    "top1_token": 311,
+    "top2_token": 320,
+    "gradient": {
+      "15": 1.1611328125,
+      "20": 0.72412109375,
+      "25": 0.37353515625,
+      "31": 0.15576171875
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1111.json",
+    "cutoff_pos": 8,
+    "top1_token": 264,
+    "top2_token": 279,
+    "gradient": {
+      "15": 0.79052734375,
+      "20": 0.7021484375,
+      "25": 0.362060546875,
+      "31": 0.12109375
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1791.json",
+    "cutoff_pos": 14,
+    "top1_token": 44868,
+    "top2_token": 34508,
+    "gradient": {
+      "15": 1.703125,
+      "20": 0.95263671875,
+      "25": 0.411865234375,
+      "31": 0.1671142578125
+    }
+  },
+  {
+    "problem_id": "test/algebra/1339.json",
+    "cutoff_pos": 8,
+    "top1_token": 856,
+    "top2_token": 279,
+    "gradient": {
+      "15": 1.3251953125,
+      "20": 0.9521484375,
+      "25": 0.5234375,
+      "31": 0.1553955078125
+    }
+  },
+  {
+    "problem_id": "test/precalculus/1133.json",
+    "cutoff_pos": 16,
+    "top1_token": 17228,
+    "top2_token": 11067,
+    "gradient": {
+      "15": 0.77099609375,
+      "20": 0.62646484375,
+      "25": 0.363525390625,
+      "31": 0.136474609375
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/2015.json",
+    "cutoff_pos": 14,
+    "top1_token": 19043,
+    "top2_token": 33218,
+    "gradient": {
+      "15": 0.79296875,
+      "20": 0.662109375,
+      "25": 0.35986328125,
+      "31": 0.140869140625
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1806.json",
+    "cutoff_pos": 16,
+    "top1_token": 323,
+    "top2_token": 773,
+    "gradient": {
+      "15": 0.57861328125,
+      "20": 0.56201171875,
+      "25": 0.1849365234375,
+      "31": 0.0732421875
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1640.json",
+    "cutoff_pos": 16,
+    "top1_token": 311,
+    "top2_token": 389,
+    "gradient": {
+      "15": 3.8046875,
+      "20": 2.732421875,
+      "25": 1.7783203125,
+      "31": 0.4072265625
+    }
+  },
+  {
+    "problem_id": "test/geometry/817.json",
+    "cutoff_pos": 15,
+    "top1_token": 264,
+    "top2_token": 458,
+    "gradient": {
+      "15": 0.52490234375,
+      "20": 0.42431640625,
+      "25": 0.27001953125,
+      "31": 0.139404296875
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/2066.json",
+    "cutoff_pos": 10,
+    "top1_token": 8350,
+    "top2_token": 264,
+    "gradient": {
+      "15": 1.4755859375,
+      "20": 1.1953125,
+      "25": 0.640625,
+      "31": 0.208740234375
+    }
+  },
+  {
+    "problem_id": "test/algebra/2043.json",
+    "cutoff_pos": 15,
+    "top1_token": 45340,
+    "top2_token": 90,
+    "gradient": {
+      "15": 0.51220703125,
+      "20": 0.42333984375,
+      "25": 0.281982421875,
+      "31": 0.09552001953125
+    }
+  },
+  {
+    "problem_id": "test/algebra/776.json",
+    "cutoff_pos": 11,
+    "top1_token": 61,
+    "top2_token": 488,
+    "gradient": {
+      "15": 0.74853515625,
+      "20": 0.65478515625,
+      "25": 0.407470703125,
+      "31": 0.1287841796875
+    }
+  },
+  {
+    "problem_id": "test/counting_and_probability/188.json",
+    "cutoff_pos": 8,
+    "top1_token": 379,
+    "top2_token": 220,
+    "gradient": {
+      "15": 1.2392578125,
+      "20": 1.1796875,
+      "25": 0.8076171875,
+      "31": 0.263427734375
+    }
+  },
+  {
+    "problem_id": "test/algebra/1796.json",
+    "cutoff_pos": 12,
+    "top1_token": 16,
+    "top2_token": 15,
+    "gradient": {
+      "15": 4.29296875,
+      "20": 3.798828125,
+      "25": 2.416015625,
+      "31": 0.440673828125
+    }
+  },
+  {
+    "problem_id": "test/number_theory/1000.json",
+    "cutoff_pos": 14,
+    "top1_token": 1667,
+    "top2_token": 11,
+    "gradient": {
+      "15": 0.6572265625,
+      "20": 0.53271484375,
+      "25": 0.3095703125,
+      "31": 0.1259765625
+    }
+  },
+  {
+    "problem_id": "test/precalculus/323.json",
+    "cutoff_pos": 15,
+    "top1_token": 16,
+    "top2_token": 18,
+    "gradient": {
+      "15": 0.456298828125,
+      "20": 0.30615234375,
+      "25": 0.2156982421875,
+      "31": 0.080322265625
+    }
+  },
+  {
+    "problem_id": "test/precalculus/398.json",
+    "cutoff_pos": 13,
+    "top1_token": 2555,
+    "top2_token": 5187,
+    "gradient": {
+      "15": 4.265625,
+      "20": 4.01953125,
+      "25": 2.859375,
+      "31": 1.3115234375
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1462.json",
+    "cutoff_pos": 8,
+    "top1_token": 264,
+    "top2_token": 282,
+    "gradient": {
+      "15": 0.8740234375,
+      "20": 0.74560546875,
+      "25": 0.467529296875,
+      "31": 0.2052001953125
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1203.json",
+    "cutoff_pos": 14,
+    "top1_token": 220,
+    "top2_token": 400,
+    "gradient": {
+      "15": 2.00390625,
+      "20": 1.240234375,
+      "25": 0.5654296875,
+      "31": 0.1497802734375
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1279.json",
+    "cutoff_pos": 9,
+    "top1_token": 16,
+    "top2_token": 64,
+    "gradient": {
+      "15": 0.1488037109375,
+      "20": 0.1470947265625,
+      "25": 0.11065673828125,
+      "31": 0.06341552734375
+    }
+  },
+  {
+    "problem_id": "test/number_theory/1090.json",
+    "cutoff_pos": 9,
+    "top1_token": 64,
+    "top2_token": 16,
+    "gradient": {
+      "15": 0.1904296875,
+      "20": 0.1878662109375,
+      "25": 0.1314697265625,
+      "31": 0.0665283203125
+    }
+  },
+  {
+    "problem_id": "test/counting_and_probability/731.json",
+    "cutoff_pos": 11,
+    "top1_token": 284,
+    "top2_token": 15279,
+    "gradient": {
+      "15": 1.3779296875,
+      "20": 0.99267578125,
+      "25": 0.5458984375,
+      "31": 0.170166015625
+    }
+  },
+  {
+    "problem_id": "test/precalculus/1202.json",
+    "cutoff_pos": 10,
+    "top1_token": 59,
+    "top2_token": 7,
+    "gradient": {
+      "15": 0.6240234375,
+      "20": 0.5029296875,
+      "25": 0.275146484375,
+      "31": 0.08856201171875
+    }
+  },
+  {
+    "problem_id": "test/number_theory/769.json",
+    "cutoff_pos": 16,
+    "top1_token": 220,
+    "top2_token": 1124,
+    "gradient": {
+      "15": 1.3232421875,
+      "20": 1.0859375,
+      "25": 0.66748046875,
+      "31": 0.266357421875
+    }
+  },
+  {
+    "problem_id": "test/precalculus/902.json",
+    "cutoff_pos": 9,
+    "top1_token": 279,
+    "top2_token": 1555,
+    "gradient": {
+      "15": 0.5419921875,
+      "20": 0.4658203125,
+      "25": 0.2890625,
+      "31": 0.11419677734375
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1128.json",
+    "cutoff_pos": 16,
+    "top1_token": 2661,
+    "top2_token": 2500,
+    "gradient": {
+      "15": 1.0830078125,
+      "20": 0.6650390625,
+      "25": 0.381591796875,
+      "31": 0.150146484375
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1467.json",
+    "cutoff_pos": 9,
+    "top1_token": 35702,
+    "top2_token": 90,
+    "gradient": {
+      "15": 0.343505859375,
+      "20": 0.31787109375,
+      "25": 0.2276611328125,
+      "31": 0.102294921875
+    }
+  },
+  {
+    "problem_id": "test/number_theory/1128.json",
+    "cutoff_pos": 15,
+    "top1_token": 87,
+    "top2_token": 61,
+    "gradient": {
+      "15": 1.626953125,
+      "20": 1.390625,
+      "25": 0.83349609375,
+      "31": 0.1761474609375
+    }
+  },
+  {
+    "problem_id": "test/number_theory/1002.json",
+    "cutoff_pos": 8,
+    "top1_token": 476,
+    "top2_token": 220,
+    "gradient": {
+      "15": 1.0390625,
+      "20": 0.61865234375,
+      "25": 0.3125,
+      "31": 0.10009765625
+    }
+  },
+  {
+    "problem_id": "test/prealgebra/1930.json",
+    "cutoff_pos": 8,
+    "top1_token": 576,
+    "top2_token": 358,
+    "gradient": {
+      "15": 0.60791015625,
+      "20": 0.481689453125,
+      "25": 0.269287109375,
+      "31": 0.08685302734375
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1930.json",
+    "cutoff_pos": 10,
+    "top1_token": 320,
+    "top2_token": 4766,
+    "gradient": {
+      "15": 1.08203125,
+      "20": 0.916015625,
+      "25": 0.56640625,
+      "31": 0.156005859375
+    }
+  },
+  {
+    "problem_id": "test/counting_and_probability/1003.json",
+    "cutoff_pos": 14,
+    "top1_token": 24,
+    "top2_token": 16,
+    "gradient": {
+      "15": 1.287109375,
+      "20": 0.822265625,
+      "25": 0.60986328125,
+      "31": 0.1907958984375
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1350.json",
+    "cutoff_pos": 10,
+    "top1_token": 19703,
+    "top2_token": 17516,
+    "gradient": {
+      "15": 0.78857421875,
+      "20": 0.70361328125,
+      "25": 0.56640625,
+      "31": 0.30517578125
+    }
+  },
+  {
+    "problem_id": "test/precalculus/703.json",
+    "cutoff_pos": 8,
+    "top1_token": 15976,
+    "top2_token": 2493,
+    "gradient": {
+      "15": 0.473876953125,
+      "20": 0.473876953125,
+      "25": 0.403564453125,
+      "31": 0.205078125
+    }
+  },
+  {
+    "problem_id": "test/algebra/2779.json",
+    "cutoff_pos": 14,
+    "top1_token": 600,
+    "top2_token": 220,
+    "gradient": {
+      "15": 2.119140625,
+      "20": 1.6201171875,
+      "25": 0.94140625,
+      "31": 0.1903076171875
+    }
+  },
+  {
+    "problem_id": "test/geometry/561.json",
+    "cutoff_pos": 11,
+    "top1_token": 6113,
+    "top2_token": 1466,
+    "gradient": {
+      "15": 2.013671875,
+      "20": 1.8203125,
+      "25": 1.455078125,
+      "31": 0.62451171875
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/158.json",
+    "cutoff_pos": 16,
+    "top1_token": 19,
+    "top2_token": 20,
+    "gradient": {
+      "15": 0.86474609375,
+      "20": 0.69384765625,
+      "25": 0.38916015625,
+      "31": 0.1365966796875
+    }
+  },
+  {
+    "problem_id": "test/number_theory/13.json",
+    "cutoff_pos": 12,
+    "top1_token": 488,
+    "top2_token": 21103,
+    "gradient": {
+      "15": 0.9189453125,
+      "20": 0.67724609375,
+      "25": 0.4306640625,
+      "31": 0.154541015625
+    }
+  },
+  {
+    "problem_id": "test/algebra/2780.json",
+    "cutoff_pos": 12,
+    "top1_token": 429,
+    "top2_token": 279,
+    "gradient": {
+      "15": 0.984375,
+      "20": 0.66064453125,
+      "25": 0.238037109375,
+      "31": 0.076171875
+    }
+  },
+  {
+    "problem_id": "test/intermediate_algebra/1508.json",
+    "cutoff_pos": 9,
+    "top1_token": 16,
+    "top2_token": 17,
+    "gradient": {
+      "15": 1.880859375,
+      "20": 1.3740234375,
+      "25": 0.677734375,
+      "31": 0.1724853515625
+    }
+  }
+]
