@@ -105,19 +105,24 @@ class RandomBaselineExperiment:
         residual_streams = {}
         hooks = []
         
-        # Debugging hook output
         def hook_fn(layer_idx):
             def hook(module, input, output):
-                # Output[0] is hidden state [1, seq, hidden]
-                # Log shape once
+                # Handle tuple vs tensor output
+                if isinstance(output, tuple):
+                    hidden = output[0]
+                else:
+                    hidden = output
+                
+                # hidden should be [batch, seq, hidden]
+                # Log shape on first layer to debug
                 if layer_idx == 0:
                    try:
-                       shape = output[0].shape
-                       log.info(f"Layer {layer_idx} output[0] shape: {shape}")
+                       log.info(f"Layer 0 output shape: {hidden.shape}, type: {type(hidden)}")
                    except:
-                       log.info(f"Layer {layer_idx} output structure: type={type(output)}")
+                       pass
 
-                residual_streams[layer_idx] = output[0][0].detach().cpu()
+                # Store [seq, hidden] for first batch element
+                residual_streams[layer_idx] = hidden[0].detach().cpu()
             return hook
             
         for i in range(self.num_layers):
@@ -138,24 +143,31 @@ class RandomBaselineExperiment:
         dla_scores = {}
         prev_z = None
         
+        # position indexing: residual_stream[layer] is [seq_len, hidden]
+        # We want the state *output* by the layer at `position`
+        
         for layer_idx in range(self.num_layers):
             if layer_idx not in residual_streams: continue
             
             z_curr = residual_streams[layer_idx][position].to(self.device).float()
             
+            # Additional debug for shape
+            if z_curr.dim() == 0:
+                 # If it collapsed to scalar, something is wrong with extraction
+                 log.error(f"Layer {layer_idx} extracted z_curr is scalar: {z_curr}")
+                 # Try to fallback? No this is critical.
+            
             if prev_z is None:
                 delta_z = z_curr # Layer 0 accumulation
             else:
                 delta_z = z_curr - prev_z
-                
-            # Ensure 1D for dot product
+            
+            # Flatten to ensure 1D
             u_flat = u.flatten().float()
             dz_flat = delta_z.flatten()
             
             if u_flat.shape != dz_flat.shape:
-                log.error(f"Shape mismatch at layer {layer_idx}: u={u_flat.shape}, dz={dz_flat.shape}")
-                # Log original shapes
-                log.error(f"Original: u={u.shape}, z_curr={z_curr.shape}")
+                log.error(f"Shape Mismatch L{layer_idx}: u={u_flat.shape}, dz={dz_flat.shape}")
                 
             dla_scores[layer_idx] = torch.dot(u_flat, dz_flat).item()
             prev_z = z_curr
@@ -169,11 +181,15 @@ class RandomBaselineExperiment:
         
         def hook_fn(layer_idx):
             def hook(module, input, output):
-                act = output[0]
+                if isinstance(output, tuple):
+                    act = output[0]
+                else:
+                    act = output
+                    
                 act.requires_grad_(True)
                 act.retain_grad()
                 activations[layer_idx] = act
-                return act
+                return output # Return original structure
             return hook
             
         for layer_idx in self.gradient_layers:
@@ -184,20 +200,13 @@ class RandomBaselineExperiment:
         outputs = self.model(input_ids)
         logits = outputs.logits[:, -1, :]
         
-        # Logit diff: we want to explain the prediction at the END of input_ids
-        # input_ids has length `position + 1` (tokens 0..position)
-        # So we predict token at `position + 1`.
-        # Wait, if `position` is the last token index, `logits[:, -1]` is correct.
-        
         logit_diff = logits[0, top1] - logits[0, top2]
         logit_diff.backward()
         
         results = {}
         for layer_idx in self.gradient_layers:
             if layer_idx in activations and activations[layer_idx].grad is not None:
-                # Gradient at the position of interest
-                # Act shape: [1, seq, hidden]
-                # We usually want the gradient at the token position that generated the logit.
+                # Gradient at the position of interest (last token)
                 grad = activations[layer_idx].grad[0, -1, :]
                 results[layer_idx] = torch.norm(grad, p=2).item()
                 
@@ -210,17 +219,15 @@ class RandomBaselineExperiment:
                          layer: int,
                          patch_type: str = "residual_stream") -> float:
         """Patch from source into base and measure next-token logit distribution shift."""
-        # Simple attribute patching:
-        # We have seq_base (which predicts BaseNext) and seq_source (which predicts SourceNext).
-        # We patch from Source -> Base.
-        # We want to see if Base outputs start looking like Source.
-        # Metric: Logit(SourceNext) - Logit(BaseNext) on the Patched run.
         
         # 1. Get Source Activation
         source_act = None
         def cache_hook(module, input, output):
             nonlocal source_act
-            source_act = output[0].detach().clone()
+            if isinstance(output, tuple):
+                source_act = output[0].detach().clone()
+            else:
+                source_act = output.detach().clone()
         
         target_layer = self.model.model.layers[layer]
         h = target_layer.register_forward_hook(cache_hook)
@@ -230,7 +237,7 @@ class RandomBaselineExperiment:
         
         if source_act is None: return 0.0
         
-        # 2. Get Targets (what tokens would strict Source and Base predict?)
+        # 2. Get Targets
         with torch.no_grad():
             logits_source = self.model(input_ids_source).logits[0, -1]
             token_source = logits_source.argmax().item()
@@ -239,20 +246,23 @@ class RandomBaselineExperiment:
             token_base = logits_base.argmax().item()
             
         if token_source == token_base:
-            return 0.0 # No divergence to patch
+            return 0.0 
             
-        # 3. Patch Source -> Base
+        # 3. Patch
         def patch_hook(module, input, output):
-            # Replace activation
-            # source_act is [1, seq, hidden]
-            # output[0] is [1, seq, hidden]
-            # We replace the whole sequence? Or just the last token?
-            # Standard patching usually replaces specific positions.
-            # Here sequences are almost identical (1 token diff).
-            # Let's replace the last token activation.
-            current_act = output[0]
+            if isinstance(output, tuple):
+                current_act = output[0]
+                rest = output[1:]
+                is_tuple = True
+            else:
+                current_act = output
+                is_tuple = False
+                
             current_act[:, -1, :] = source_act[:, -1, :].to(current_act.device)
-            return (current_act,) + output[1:]
+            
+            if is_tuple:
+                return (current_act,) + rest
+            return current_act
             
         h = target_layer.register_forward_hook(patch_hook)
         with torch.no_grad():
@@ -260,9 +270,6 @@ class RandomBaselineExperiment:
         h.remove()
         
         logits_patched = out_patched.logits[0, -1]
-        
-        # Metric: Logit(TokenSource) - Logit(TokenBase)
-        # High value = Successfully made Base think like Source
         metric = logits_patched[token_source] - logits_patched[token_base]
         return metric.item()
 
@@ -283,7 +290,6 @@ class RandomBaselineExperiment:
             ref_text = prob['problem'] + prob['outputs'][0] # Use first rollout
             input_ids = self.tokenizer.encode(ref_text, return_tensors='pt').to(self.device)
             
-            # 1. Random Cutoff [8, 16]
             seq_len = input_ids.shape[1]
             if seq_len < 10: continue
                 
@@ -291,15 +297,9 @@ class RandomBaselineExperiment:
             if max_idx < 8: continue
             
             cutoff_pos = random.randint(8, max_idx)
-            
-            # "Prefix" is up to cutoff. The token AT cutoff is the one we just processed.
-            # We want to predict the NEXT token.
-            # input_ids[:, :cutoff_pos+1] means indices 0..cutoff_pos. Length is cutoff_pos+1.
-            # We analyze the decision made at the end of this sequence.
-            
             prefix_ids = input_ids[:, :cutoff_pos+1] 
             
-            # Get Top1, Top2 from this prefix
+            # Get Top1, Top2
             with torch.no_grad():
                 out = self.model(prefix_ids)
                 logits = out.logits[0, -1, :]
@@ -314,18 +314,11 @@ class RandomBaselineExperiment:
             grad_res = self.run_gradient(prefix_ids, -1, top1_token, top2_token)
             
             # --- Patching ---
-            # Construct Sequence 1 (Prefix + Top1) and Sequence 2 (Prefix + Top2)
-            # Patching happens at the NEXT step (cutoff_pos + 1)
-            # We want to see if patching 'Source' (Top1) into 'Base' (Top2)
-            # makes Base predict Top1's next token.
-            
             seq1 = torch.cat([prefix_ids, torch.tensor([[top1_token]], device=self.device)], dim=1)
             seq2 = torch.cat([prefix_ids, torch.tensor([[top2_token]], device=self.device)], dim=1)
             
             patch_res = {}
             for layer in self.patch_layers:
-                # Patching Source (Seq1) -> Base (Seq2)
-                # If Seq1 and Seq2 diverge in prediction, we measure recovery.
                 effect = self.patch_and_measure(seq2, seq1, layer)
                 patch_res[layer] = effect
             
@@ -339,21 +332,17 @@ class RandomBaselineExperiment:
                 'patching': patch_res
             })
             
-            # Periodic Checkpoint
             if (idx + 1) % checkpoint_interval == 0:
                 with open(checkpoint_file, 'w') as f:
                     json.dump(all_results, f, indent=2)
-                log.info(f"Checkpointed {len(all_results)} results to {checkpoint_file}")
+                log.info(f"Checkpointed {len(all_results)} results")
             
-        # Save aggregated
         with open(self.output_dir / "random_baseline_full.json", 'w') as f:
             json.dump(all_results, f, indent=2)
             
-        # Clean up partial
         if checkpoint_file.exists():
             checkpoint_file.unlink()
             
-        # Compute minimal stats for checking
         log.info("Analysis complete.")
         log.info(f"Saved {len(all_results)} entries to {self.output_dir / 'random_baseline_full.json'}")
 
