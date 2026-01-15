@@ -79,10 +79,27 @@ class RandomBaselineExperiment:
         if sweep_dir.exists():
             # Use rglob to find log.jsonl in any subdirectory
             for log_file in sweep_dir.rglob("log.jsonl"):
+                path_str = str(log_file)
+                
                 # Filter for temperature 0.6
-                if "temp0.6" not in str(log_file):
+                if "temp0.6" not in path_str:
                     continue
                     
+                # Filter for correct model if specified in config
+                model_filter = self.config.get('data_source', {}).get('model_name')
+                if not model_filter:
+                    # Try to guess from model config name
+                    model_filter = self.config.get('model', {}).get('name')
+                    
+                if model_filter and model_filter not in path_str:
+                     # Be flexible: if config says "qwen3-8b" but path has "deepseek-qwen3-8b", 
+                     # we might want to be careful.
+                     # If model is "qwen3-8b", we exclude "deepseek".
+                     if "deepseek" in path_str and "deepseek" not in model_filter:
+                         continue
+                     if model_filter not in path_str:
+                         continue
+
                 log.info(f"Found log file: {log_file}")
                 with open(log_file, 'r') as f:
                     for line in f:
@@ -289,18 +306,26 @@ class RandomBaselineExperiment:
         checkpoint_interval = 10
         checkpoint_file = self.output_dir / "random_baseline_partial.json"
         
+        # Get token range from config, default to [8, 16]
+        token_range = self.config.get('random_baseline', {}).get('token_range', [8, 16])
+        min_pos, max_pos = token_range[0], token_range[1]
+        
         for idx, prob in enumerate(tqdm(problems, desc="Processing Random Baseline")):
             # Setup sequence
             ref_text = prob['problem'] + prob['outputs'][0] # Use first rollout
             input_ids = self.tokenizer.encode(ref_text, return_tensors='pt').to(self.device)
             
             seq_len = input_ids.shape[1]
-            if seq_len < 10: continue
+            # Ensure we have enough tokens to even reach min_pos
+            if seq_len < min_pos + 2: continue
                 
-            max_idx = min(16, seq_len - 2)
-            if max_idx < 8: continue
+            # Cap max index at actual sequence length (-2 for next token pred)
+            # Use configurable max_pos
+            curr_max_idx = min(max_pos, seq_len - 2)
             
-            cutoff_pos = random.randint(8, max_idx)
+            if curr_max_idx < min_pos: continue
+            
+            cutoff_pos = random.randint(min_pos, curr_max_idx)
             prefix_ids = input_ids[:, :cutoff_pos+1] 
             
             # Get Top1, Top2

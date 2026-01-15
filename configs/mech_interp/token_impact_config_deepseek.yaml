@@ -7,7 +7,7 @@ name: token_impact_identification_deepseek
 # Model configuration
 model:
   name: "deepseek-qwen3-8b"
-  model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"  # Assuming Distill-Qwen-7B for "DeepSeek-Qwen3-8B" or similar relevant ID
+  model_id: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B"  # Assuming Distill-Qwen-7B for "DeepSeek-Qwen3-8B" or similar relevant ID
   type: "local"
   device: "cuda"
   dtype: "float16"

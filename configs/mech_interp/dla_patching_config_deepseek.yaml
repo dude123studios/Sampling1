@@ -1,0 +1,67 @@
+# Direct Logit Attribution (DLA) and Activation Patching Configuration (DeepSeek)
+# Quantifies which layers contribute to preferring token A over token B
+
+name: dla_patching_experiments_deepseek
+
+# Model configuration
+model:
+  name: "deepseek-qwen3-8b"
+  model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-8B"
+  type: "local"
+  device: "cuda"
+  dtype: "float16"
+
+  # Deterministic settings
+  seed: 42
+  deterministic: true
+  dropout: 0.0
+
+# Global setup
+global_setup:
+  disable_dropout: true
+  set_deterministic: true
+  use_fp16: true
+
+# Random Baseline Configuration (New)
+random_baseline:
+  enabled: true
+  token_range: [8, 16]
+
+# Branching points (from token impact identification results)
+branching_points:
+  source_file: "mech_interp/token_impact_results_deepseek/token_impact_results.json" 
+
+# Direct Logit Attribution (DLA) settings
+dla_config:
+  enabled: true
+  layers: "all"  # Will analyze all layers
+  
+  # Focus bands for detailed analysis (DeepSeek might differ, but keeping similar for now)
+  analysis_bands:
+    abstraction: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    commitment: [22, 23, 24, 25, 26, 27, 28]
+
+  compute_stats:
+    - "mean_dla_per_layer"
+    - "variance_per_layer"
+    - "difference_curve"
+
+# Activation Patching Configuration
+patching:
+  enabled: true
+  patch_types:
+    - "residual_stream"
+  
+  # Patch at each layer (0-31 for 8B models)
+  layers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+  
+  metric: "logit_difference"
+
+# Gradient attribution parameters
+gradient_analysis:
+  enabled: true
+  compute_gradients: true
+  layers: [15, 20, 25, 31]
+
+# Number of problems to analyze
+limit: null

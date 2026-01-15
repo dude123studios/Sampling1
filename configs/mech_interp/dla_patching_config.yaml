@@ -22,6 +22,11 @@ global_setup:
   set_deterministic: true
   use_fp16: true
 
+# Random Baseline Configuration (New)
+random_baseline:
+  enabled: true
+  token_range: [8, 16]
+
 # Branching points (from token impact identification results)
 # This will be populated after running token impact identification
 branching_points:

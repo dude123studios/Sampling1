@@ -4,32 +4,79 @@
   "total_runs": 1,
   "results": [
     {
-      "run_config": {
-        "model": {
-          "name": "qwen3-8b",
-          "model_name": "qwen/qwen3-8b",
-          "type": "api",
-          "provider": "openrouter"
+      "run_name": "qwen3-8b_temp0.9_n5_all_levels_2026-01-14_19-08-10",
+      "output_dir": "results/sweeps/temperature_sweep/qwen3-8b_temp0.9_n5_all_levels_2026-01-14_14-55-40",
+      "summary": {
+        "type": "summary",
+        "run_config": {
+          "model": {
+            "name": "qwen3-8b",
+            "model_name": "qwen/qwen3-8b",
+            "type": "api",
+            "provider": "openrouter"
+          },
+          "task": {
+            "name": "math",
+            "dataset": "HuggingFaceH4/MATH-500",
+            "split": "test",
+            "level_filter": null,
+            "subject_filter": null
+          },
+          "method": {
+            "name": "baseline"
+          },
+          "parameters": {
+            "temperature": 0.9,
+            "num_samples": 5,
+            "level_filter": null,
+            "limit": null
+          }
         },
-        "task": {
-          "name": "math",
-          "dataset": "HuggingFaceH4/MATH-500",
-          "split": "test",
-          "level_filter": null,
-          "subject_filter": null
-        },
-        "method": {
-          "name": "baseline"
-        },
-        "parameters": {
-          "temperature": 0.9,
-          "num_samples": 5,
-          "level_filter": null,
-          "limit": null
+        "timestamp": "2026-01-14T22:14:38.097657",
+        "total_items": 497,
+        "avg_num_correct": 3.6277665995975856,
+        "avg_pass@1": 0.7255533199195171,
+        "avg_pass@5": 0.8611670020120724,
+        "avg_one@k": 0.8611670020120724,
+        "per_level_metrics": {
+          "level_1": {
+            "count": 43,
+            "num_correct": 4.3023255813953485,
+            "pass@1": 0.8604651162790697,
+            "pass@5": 0.8837209302325582,
+            "one@k": 0.8837209302325582
+          },
+          "level_2": {
+            "count": 90,
+            "num_correct": 4.133333333333334,
+            "pass@1": 0.8266666666666668,
+            "pass@5": 0.9,
+            "one@k": 0.9
+          },
+          "level_3": {
+            "count": 103,
+            "num_correct": 3.8737864077669903,
+            "pass@1": 0.7747572815533981,
+            "pass@5": 0.883495145631068,
+            "one@k": 0.883495145631068
+          },
+          "level_4": {
+            "count": 127,
+            "num_correct": 3.590551181102362,
+            "pass@1": 0.7181102362204724,
+            "pass@5": 0.889763779527559,
+            "one@k": 0.889763779527559
+          },
+          "level_5": {
+            "count": 134,
+            "num_correct": 2.917910447761194,
+            "pass@1": 0.5835820895522388,
+            "pass@5": 0.7835820895522388,
+            "one@k": 0.7835820895522388
+          }
         }
-      },
-      "error": "API Key not found in environment variable: OPENROUTER_API_KEY"
+      }
     }
   ],
-  "timestamp": "2026-01-14T19:07:44.225839"
+  "timestamp": "2026-01-14T22:14:38.101424"
 }
