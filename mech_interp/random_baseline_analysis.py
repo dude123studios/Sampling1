@@ -93,15 +93,31 @@ class RandomBaselineExperiment:
                 if not model_filter:
                     # Try to guess from model config name
                     model_filter = self.config.get('model', {}).get('name')
-                    
-                if model_filter and model_filter not in path_str:
-                     # Be flexible: if config says "qwen3-8b" but path has "deepseek-qwen3-8b", 
-                     # we might want to be careful.
-                     # If model is "qwen3-8b", we exclude "deepseek".
-                     if "deepseek" in path_str and "deepseek" not in model_filter:
-                         continue
-                     if model_filter not in path_str:
-                         continue
+
+                if model_filter:
+                    # Extract just the directory name to check model
+                    dir_name = log_file.parent.name
+
+                    # If filter is "qwen3-8b", exclude "deepseek-qwen3-8b"
+                    if model_filter == "qwen3-8b":
+                        if "deepseek" in dir_name:
+                            log.debug(f"Skipping {dir_name}: contains 'deepseek' but filter is qwen3-8b")
+                            continue
+                        if "qwen3-8b" not in dir_name:
+                            log.debug(f"Skipping {dir_name}: doesn't contain 'qwen3-8b'")
+                            continue
+
+                    # If filter is "deepseek-qwen3-8b", only include that
+                    elif model_filter == "deepseek-qwen3-8b":
+                        if "deepseek-qwen3-8b" not in dir_name:
+                            log.debug(f"Skipping {dir_name}: doesn't contain 'deepseek-qwen3-8b'")
+                            continue
+
+                    # Generic filter: must contain the filter string
+                    else:
+                        if model_filter not in dir_name:
+                            log.debug(f"Skipping {dir_name}: doesn't contain '{model_filter}'")
+                            continue
 
                 log.info(f"Found log file: {log_file}")
                 with open(log_file, 'r') as f:
@@ -237,49 +253,53 @@ class RandomBaselineExperiment:
         self.model.zero_grad()
         return results
 
-    def patch_and_measure(self, input_ids_base: torch.Tensor,
-                         input_ids_source: torch.Tensor,
+    def patch_and_measure(self, prefix_ids: torch.Tensor,
                          layer: int,
                          top1_token: int,
-                         top2_token: int,
-                         patch_type: str = "residual_stream") -> float:
+                         top2_token: int) -> float:
         """
-        Patch from source into base and measure change in top1 vs top2 logit difference.
+        Patch activations at a specific layer and measure causal effect.
+
+        Strategy:
+        1. Run forward pass on prefix, cache activation at this layer
+        2. Append top2_token and run forward to get baseline logits for next position
+        3. Patch in the cached activation and measure how logits change
 
         Args:
-            input_ids_base: Sequence with top2 token appended (the "worse" path)
-            input_ids_source: Sequence with top1 token appended (the "better" path)
+            prefix_ids: The prefix sequence (before appending any token)
             layer: Which layer to patch
             top1_token: The preferred token ID
             top2_token: The alternative token ID
 
         Returns:
-            Change in (logit[top1] - logit[top2]) after patching at position -2
+            Causal effect: how much patching increases preference for top1 over top2
         """
-        # 1. Cache activation from source (top1 path) at position -2 (decision point)
-        source_act = None
+        # 1. Cache activation from prefix at last position for this layer
+        cached_act = None
         def cache_hook(module, input, output):
-            nonlocal source_act
+            nonlocal cached_act
             if isinstance(output, tuple):
-                source_act = output[0].detach().clone()
+                cached_act = output[0][:, -1:, :].detach().clone()  # [1, 1, hidden]
             else:
-                source_act = output.detach().clone()
+                cached_act = output[:, -1:, :].detach().clone()
 
         target_layer = self.model.model.layers[layer]
         h = target_layer.register_forward_hook(cache_hook)
         with torch.no_grad():
-            self.model(input_ids_source)
+            _ = self.model(prefix_ids)
         h.remove()
 
-        if source_act is None:
+        if cached_act is None:
             return 0.0
 
-        # 2. Get baseline logit difference (without patching) at position -2
+        # 2. Append top2_token and get baseline logits (without patching)
+        seq_with_top2 = torch.cat([prefix_ids, torch.tensor([[top2_token]], device=self.device)], dim=1)
         with torch.no_grad():
-            logits_base = self.model(input_ids_base).logits[0, -2]  # Position before appended token
-            baseline_diff = logits_base[top1_token] - logits_base[top2_token]
+            out_baseline = self.model(seq_with_top2)
+            logits_baseline = out_baseline.logits[0, -1]  # Logits for next token position
+            baseline_diff = logits_baseline[top1_token] - logits_baseline[top2_token]
 
-        # 3. Patch activation at position -2 from source into base
+        # 3. Patch: inject cached activation at the last position of this layer
         def patch_hook(module, input, output):
             if isinstance(output, tuple):
                 current_act = output[0]
@@ -289,8 +309,8 @@ class RandomBaselineExperiment:
                 current_act = output
                 is_tuple = False
 
-            # Patch the decision point (position -2, not -1)
-            current_act[:, -2, :] = source_act[:, -2, :].to(current_act.device)
+            # Replace activation at last position with cached activation from prefix
+            current_act[:, -1:, :] = cached_act.to(current_act.device)
 
             if is_tuple:
                 return (current_act,) + rest
@@ -298,15 +318,14 @@ class RandomBaselineExperiment:
 
         h = target_layer.register_forward_hook(patch_hook)
         with torch.no_grad():
-            out_patched = self.model(input_ids_base)
+            out_patched = self.model(seq_with_top2)
         h.remove()
 
-        # 4. Measure patched logit difference at position -2
-        logits_patched = out_patched.logits[0, -2]
+        # 4. Measure patched logits
+        logits_patched = out_patched.logits[0, -1]
         patched_diff = logits_patched[top1_token] - logits_patched[top2_token]
 
-        # Return the change in logit difference caused by patching
-        # Positive values mean patching makes the model prefer top1 more
+        # Return how much patching changes the preference (positive = helps top1)
         return (patched_diff - baseline_diff).item()
 
 
@@ -370,12 +389,9 @@ class RandomBaselineExperiment:
             
             # --- Patching ---
             if "patching" in self.modes:
-                seq1 = torch.cat([prefix_ids, torch.tensor([[top1_token]], device=self.device)], dim=1)
-                seq2 = torch.cat([prefix_ids, torch.tensor([[top2_token]], device=self.device)], dim=1)
-
                 patch_res = {}
                 for layer in self.patch_layers:
-                    effect = self.patch_and_measure(seq2, seq1, layer, top1_token, top2_token)
+                    effect = self.patch_and_measure(prefix_ids, layer, top1_token, top2_token)
                     patch_res[layer] = effect
                 result_entry['patching'] = patch_res
             
