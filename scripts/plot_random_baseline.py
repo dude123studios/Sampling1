@@ -6,16 +6,26 @@ import numpy as np
 import os
 from pathlib import Path
 
+# Set seaborn style for premium look
+sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
+palette = sns.color_palette("viridis")
+
 def load_json(path):
     if not os.path.exists(path):
+        print(f"Warning: File not found: {path}")
         return []
     with open(path, 'r') as f:
         return json.load(f)
 
 def plot_dla(data, model_name, output_dir):
     """Plot DLA aggregated scores."""
-    if not data or 'dla' not in data[0]:
-        print(f"No DLA data for {model_name}")
+    if not data:
+        print(f"No data provided for DLA {model_name}")
+        return
+        
+    # Check if first entry has 'dla'
+    if 'dla' not in data[0]:
+        print(f"No 'dla' key in data for {model_name}")
         return
 
     # Aggregate by layer
@@ -28,20 +38,28 @@ def plot_dla(data, model_name, output_dir):
                 layer_scores[l_idx] = []
             layer_scores[l_idx].append(score)
             
+    if not layer_scores:
+        print(f"No DLA scores found for {model_name}")
+        return
+
     # Compute mean/std
     layers = sorted(layer_scores.keys())
     means = [np.mean(layer_scores[l]) for l in layers]
     sems = [np.std(layer_scores[l])/np.sqrt(len(layer_scores[l])) for l in layers]
     
-    plt.figure(figsize=(10, 6))
-    plt.errorbar(layers, means, yerr=sems, fmt='-o', capsize=5)
-    plt.title(f'Direct Logit Attribution (Random Baseline) - {model_name}')
-    plt.xlabel('Layer')
-    plt.ylabel('DLA Score (contribution to logit diff)')
-    plt.grid(True, alpha=0.3)
-    plt.savefig(output_dir / f"dla_{model_name}.png")
+    plt.figure(figsize=(12, 7))
+    plt.errorbar(layers, means, yerr=sems, fmt='-o', capsize=5, linewidth=2, markersize=8, color=palette[0], label='DLA Score')
+    plt.title(f'Direct Logit Attribution (Random Baseline)\n{model_name}', fontsize=16, pad=20)
+    plt.xlabel('Layer Index', fontsize=14)
+    plt.ylabel('Contribution to Logit Difference', fontsize=14)
+    plt.axhline(0, color='gray', linestyle='--', alpha=0.5)
+    plt.legend(frameon=True, fancybox=True, framealpha=0.9)
+    plt.tight_layout()
+    
+    out_file = output_dir / f"dla_{model_name.lower().replace('-', '_')}.png"
+    plt.savefig(out_file, dpi=300)
     plt.close()
-    print(f"Saved DLA plot for {model_name}")
+    print(f"Saved DLA plot: {out_file}")
 
 def plot_gradient(data, model_name, output_dir):
     """Plot Gradient norms."""
@@ -58,19 +76,26 @@ def plot_gradient(data, model_name, output_dir):
                 layer_norms[l_idx] = []
             layer_norms[l_idx].append(norm)
             
+    if not layer_norms:
+        return
+
     layers = sorted(layer_norms.keys())
     means = [np.mean(layer_norms[l]) for l in layers]
     sems = [np.std(layer_norms[l])/np.sqrt(len(layer_norms[l])) for l in layers]
     
-    plt.figure(figsize=(10, 6))
-    plt.errorbar(layers, means, yerr=sems, fmt='-s', capsize=5, color='orange')
-    plt.title(f'Gradient Attribution (Random Baseline) - {model_name}')
-    plt.xlabel('Layer')
-    plt.ylabel('Gradient L2 Norm')
+    plt.figure(figsize=(12, 7))
+    plt.errorbar(layers, means, yerr=sems, fmt='-s', capsize=5, linewidth=2, markersize=8, color=palette[3], label='Gradient Norm')
+    plt.title(f'Gradient Attribution (Random Baseline)\n{model_name}', fontsize=16, pad=20)
+    plt.xlabel('Layer Index', fontsize=14)
+    plt.ylabel('Gradient L2 Norm', fontsize=14)
     plt.grid(True, alpha=0.3)
-    plt.savefig(output_dir / f"gradient_{model_name}.png")
+    plt.legend(frameon=True, fancybox=True, framealpha=0.9)
+    plt.tight_layout()
+    
+    out_file = output_dir / f"gradient_{model_name.lower().replace('-', '_')}.png"
+    plt.savefig(out_file, dpi=300)
     plt.close()
-    print(f"Saved Gradient plot for {model_name}")
+    print(f"Saved Gradient plot: {out_file}")
 
 def plot_patching(data, model_name, output_dir):
     """Plot Patching effects."""
@@ -87,55 +112,73 @@ def plot_patching(data, model_name, output_dir):
                 layer_effects[l_idx] = []
             layer_effects[l_idx].append(effect)
             
+    if not layer_effects:
+        return
+
     layers = sorted(layer_effects.keys())
     means = [np.mean(layer_effects[l]) for l in layers]
     sems = [np.std(layer_effects[l])/np.sqrt(len(layer_effects[l])) for l in layers]
     
-    plt.figure(figsize=(10, 6))
-    plt.errorbar(layers, means, yerr=sems, fmt='-^', capsize=5, color='green')
-    plt.title(f'Activation Patching (Random Baseline) - {model_name}')
-    plt.xlabel('Layer')
-    plt.ylabel('Logit Difference Recovery')
-    plt.grid(True, alpha=0.3)
-    plt.savefig(output_dir / f"patching_{model_name}.png")
+    plt.figure(figsize=(12, 7))
+    plt.errorbar(layers, means, yerr=sems, fmt='-^', capsize=5, linewidth=2, markersize=8, color=palette[4], label='Patching Effect')
+    plt.title(f'Activation Patching (Random Baseline)\n{model_name}', fontsize=16, pad=20)
+    plt.xlabel('Layer Index', fontsize=14)
+    plt.ylabel('Logit Difference Recovery', fontsize=14)
+    plt.axhline(0, color='gray', linestyle='--', alpha=0.5)
+    plt.legend(frameon=True, fancybox=True, framealpha=0.9)
+    plt.tight_layout()
+    
+    out_file = output_dir / f"patching_{model_name.lower().replace('-', '_')}.png"
+    plt.savefig(out_file, dpi=300)
     plt.close()
-    print(f"Saved Patching plot for {model_name}")
+    print(f"Saved Patching plot: {out_file}")
 
 
 def main():
     base_dir = Path("mech_interp/random_baseline_results")
-    output_dir = Path("results/plots/random_baseline")
+    output_dir = Path("figures/random_baseline")
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # 1. Load Qwen Data (Second half of full.json)
-    full_data = load_json(base_dir / "random_baseline_full.json")
-    if len(full_data) >= 134:
-        # Assuming second half is Qwen Logs (as directory qwen > deepseek)
-        qwen_data = full_data[134:] if len(full_data) == 268 else full_data # Fallback if size differs
-        if len(full_data) == 268:
-             print("Identified 268 entries. Using indices 134-268 for Qwen Baseline.")
-        else:
-             print(f"Warning: Full data size {len(full_data)} != 268. Using all as Qwen?")
-             qwen_data = full_data
-             
-        plot_dla(qwen_data, "qwen3-8b", output_dir)
-        plot_gradient(qwen_data, "qwen3-8b", output_dir)
-        plot_patching(qwen_data, "qwen3-8b", output_dir)
+    print(f"Generating plots in {output_dir}...")
+
+    # 1. Qwen Data
+    # Prefer consolidated file if available
+    qwen_path = base_dir / "final_baseline_qwen.json"
+    if qwen_path.exists():
+        qwen_data = load_json(qwen_path)
+    else:
+        # Fallback to reconstructing from partials if needed, or error
+        # Assuming user has run everything, let's look for separate files if consolidated missing
+        print("Consolidated Qwen file not found, trying separate files...")
+        qwen_patch = load_json(base_dir / "random_baseline_qwen_patching.json")
+        qwen_grad = load_json(base_dir / "random_baseline_qwen_gradient.json")
+        # Just plot separately in this case
+        qwen_data = [] # Placeholder to skip combined logic
+        if qwen_patch: plot_patching(qwen_patch, "Qwen3-8B", output_dir)
+        if qwen_grad: plot_gradient(qwen_grad, "Qwen3-8B", output_dir)
+
+    if qwen_data:
+        plot_dla(qwen_data, "Qwen3-8B", output_dir)
+        plot_gradient(qwen_data, "Qwen3-8B", output_dir)
+        plot_patching(qwen_data, "Qwen3-8B", output_dir)
     
-    # 2. Load DeepSeek Data
+    # 2. DeepSeek Data
+    ds_dla = load_json(base_dir / "random_baseline_deepseek_dla.json")
     ds_patch = load_json(base_dir / "random_baseline_deepseek_patching.json")
     ds_grad = load_json(base_dir / "random_baseline_deepseek_gradient.json")
     
-    # Merge for DeepSeek (by index assuming ordered, or just plot separately)
-    # We can plot separately easily.
-    
+    if ds_dla:
+        plot_dla(ds_dla, "DeepSeek-R1", output_dir)
+    else:
+        print("Skipping DeepSeek DLA (No data found)")
+        
     if ds_patch:
-        plot_patching(ds_patch, "deepseek-R1", output_dir)
+        plot_patching(ds_patch, "DeepSeek-R1", output_dir)
     
     if ds_grad:
-        plot_gradient(ds_grad, "deepseek-R1", output_dir)
+        plot_gradient(ds_grad, "DeepSeek-R1", output_dir)
         
-    print("\nVisualizations saved to results/plots/random_baseline/")
+    print("\nDone. All plots generated.")
 
 if __name__ == "__main__":
     main()

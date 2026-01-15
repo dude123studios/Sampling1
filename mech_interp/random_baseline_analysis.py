@@ -237,13 +237,26 @@ class RandomBaselineExperiment:
         self.model.zero_grad()
         return results
 
-    def patch_and_measure(self, input_ids_base: torch.Tensor, 
+    def patch_and_measure(self, input_ids_base: torch.Tensor,
                          input_ids_source: torch.Tensor,
                          layer: int,
+                         top1_token: int,
+                         top2_token: int,
                          patch_type: str = "residual_stream") -> float:
-        """Patch from source into base and measure next-token logit distribution shift."""
-        
-        # 1. Get Source Activation
+        """
+        Patch from source into base and measure change in top1 vs top2 logit difference.
+
+        Args:
+            input_ids_base: Sequence with top2 token appended (the "worse" path)
+            input_ids_source: Sequence with top1 token appended (the "better" path)
+            layer: Which layer to patch
+            top1_token: The preferred token ID
+            top2_token: The alternative token ID
+
+        Returns:
+            Change in (logit[top1] - logit[top2]) after patching at position -2
+        """
+        # 1. Cache activation from source (top1 path) at position -2 (decision point)
         source_act = None
         def cache_hook(module, input, output):
             nonlocal source_act
@@ -251,27 +264,22 @@ class RandomBaselineExperiment:
                 source_act = output[0].detach().clone()
             else:
                 source_act = output.detach().clone()
-        
+
         target_layer = self.model.model.layers[layer]
         h = target_layer.register_forward_hook(cache_hook)
         with torch.no_grad():
             self.model(input_ids_source)
         h.remove()
-        
-        if source_act is None: return 0.0
-        
-        # 2. Get Targets
+
+        if source_act is None:
+            return 0.0
+
+        # 2. Get baseline logit difference (without patching) at position -2
         with torch.no_grad():
-            logits_source = self.model(input_ids_source).logits[0, -1]
-            token_source = logits_source.argmax().item()
-            
-            logits_base = self.model(input_ids_base).logits[0, -1]
-            token_base = logits_base.argmax().item()
-            
-        if token_source == token_base:
-            return 0.0 
-            
-        # 3. Patch
+            logits_base = self.model(input_ids_base).logits[0, -2]  # Position before appended token
+            baseline_diff = logits_base[top1_token] - logits_base[top2_token]
+
+        # 3. Patch activation at position -2 from source into base
         def patch_hook(module, input, output):
             if isinstance(output, tuple):
                 current_act = output[0]
@@ -280,21 +288,26 @@ class RandomBaselineExperiment:
             else:
                 current_act = output
                 is_tuple = False
-                
-            current_act[:, -1, :] = source_act[:, -1, :].to(current_act.device)
-            
+
+            # Patch the decision point (position -2, not -1)
+            current_act[:, -2, :] = source_act[:, -2, :].to(current_act.device)
+
             if is_tuple:
                 return (current_act,) + rest
             return current_act
-            
+
         h = target_layer.register_forward_hook(patch_hook)
         with torch.no_grad():
             out_patched = self.model(input_ids_base)
         h.remove()
-        
-        logits_patched = out_patched.logits[0, -1]
-        metric = logits_patched[token_source] - logits_patched[token_base]
-        return metric.item()
+
+        # 4. Measure patched logit difference at position -2
+        logits_patched = out_patched.logits[0, -2]
+        patched_diff = logits_patched[top1_token] - logits_patched[top2_token]
+
+        # Return the change in logit difference caused by patching
+        # Positive values mean patching makes the model prefer top1 more
+        return (patched_diff - baseline_diff).item()
 
 
     def run_experiment(self):
@@ -359,10 +372,10 @@ class RandomBaselineExperiment:
             if "patching" in self.modes:
                 seq1 = torch.cat([prefix_ids, torch.tensor([[top1_token]], device=self.device)], dim=1)
                 seq2 = torch.cat([prefix_ids, torch.tensor([[top2_token]], device=self.device)], dim=1)
-                
+
                 patch_res = {}
                 for layer in self.patch_layers:
-                    effect = self.patch_and_measure(seq2, seq1, layer)
+                    effect = self.patch_and_measure(seq2, seq1, layer, top1_token, top2_token)
                     patch_res[layer] = effect
                 result_entry['patching'] = patch_res
             
