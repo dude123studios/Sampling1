@@ -15,7 +15,6 @@ parameters:
   num_samples:
   - 5
   temperature:
-  - 0.6
   - 0.9
 task:
   dataset: HuggingFaceH4/MATH-500

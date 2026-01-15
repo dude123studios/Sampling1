@@ -105,9 +105,18 @@ class RandomBaselineExperiment:
         residual_streams = {}
         hooks = []
         
+        # Debugging hook output
         def hook_fn(layer_idx):
             def hook(module, input, output):
                 # Output[0] is hidden state [1, seq, hidden]
+                # Log shape once
+                if layer_idx == 0:
+                   try:
+                       shape = output[0].shape
+                       log.info(f"Layer {layer_idx} output[0] shape: {shape}")
+                   except:
+                       log.info(f"Layer {layer_idx} output structure: type={type(output)}")
+
                 residual_streams[layer_idx] = output[0][0].detach().cpu()
             return hook
             
@@ -129,10 +138,6 @@ class RandomBaselineExperiment:
         dla_scores = {}
         prev_z = None
         
-        # position indexing: residual_stream[layer] is [seq_len, hidden]
-        # We want the state *output* by the layer at `position`
-        # Because we predict `position+1` from state at `position`.
-        
         for layer_idx in range(self.num_layers):
             if layer_idx not in residual_streams: continue
             
@@ -144,7 +149,15 @@ class RandomBaselineExperiment:
                 delta_z = z_curr - prev_z
                 
             # Ensure 1D for dot product
-            dla_scores[layer_idx] = torch.dot(u.flatten().float(), delta_z.flatten()).item()
+            u_flat = u.flatten().float()
+            dz_flat = delta_z.flatten()
+            
+            if u_flat.shape != dz_flat.shape:
+                log.error(f"Shape mismatch at layer {layer_idx}: u={u_flat.shape}, dz={dz_flat.shape}")
+                # Log original shapes
+                log.error(f"Original: u={u.shape}, z_curr={z_curr.shape}")
+                
+            dla_scores[layer_idx] = torch.dot(u_flat, dz_flat).item()
             prev_z = z_curr
             
         return dla_scores

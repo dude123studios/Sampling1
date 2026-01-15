@@ -6,7 +6,10 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(pip show:*)",
-      "Bash(source:*)"
+      "Bash(source:*)",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(ls:*)"
     ]
   }
 }

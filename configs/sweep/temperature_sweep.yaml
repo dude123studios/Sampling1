@@ -9,7 +9,7 @@ models:
     type: "api"
     provider: "openrouter"
 parameters:
-  temperature: [0.6, 0.9]
+  temperature: [0.9]
   num_samples: [5]
   level_filter: [null]
   limit: [null]
