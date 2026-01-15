@@ -42,6 +42,108 @@ class RandomBaselineExperiment:
         log.info(f"Running modes: {self.modes}")
 
         self.device = self.config['model']['device']
+        # ... (rest of init) ...
+
+    # ... (skipping methods until run_experiment) ...
+
+    def run_experiment(self):
+        problems = self.load_sweep_data()
+        
+        if not problems:
+            log.warning("No problems loaded! Check your data source directory.")
+            return
+
+        all_results = []
+        checkpoint_interval = 10
+        checkpoint_file = self.output_dir / "random_baseline_partial.json"
+        
+        # Get token range from config, default to [8, 16]
+        token_range = self.config.get('random_baseline', {}).get('token_range', [8, 16])
+        min_pos, max_pos = token_range[0], token_range[1]
+        
+        for idx, prob in enumerate(tqdm(problems, desc="Processing Random Baseline")):
+            # Setup sequence
+            ref_text = prob['problem'] + prob['outputs'][0] # Use first rollout
+            input_ids = self.tokenizer.encode(ref_text, return_tensors='pt').to(self.device)
+            
+            seq_len = input_ids.shape[1]
+            # Ensure we have enough tokens to even reach min_pos
+            if seq_len < min_pos + 2: continue
+                
+            # Cap max index at actual sequence length (-2 for next token pred)
+            # Use configurable max_pos
+            curr_max_idx = min(max_pos, seq_len - 2)
+            
+            if curr_max_idx < min_pos: continue
+            
+            cutoff_pos = random.randint(min_pos, curr_max_idx)
+            prefix_ids = input_ids[:, :cutoff_pos+1] 
+            
+            # Get Top1, Top2
+            with torch.no_grad():
+                out = self.model(prefix_ids)
+                logits = out.logits[0, -1, :]
+                topk = torch.topk(logits, 2)
+                top1_token = topk.indices[0].item()
+                top2_token = topk.indices[1].item()
+            
+            result_entry = {
+                'problem_id': prob['problem_id'],
+                'cutoff_pos': cutoff_pos,
+                'top1_token': top1_token,
+                'top2_token': top2_token,
+            }
+
+            # --- DLA ---
+            if "dla" in self.modes:
+                dla_res = self.run_dla(prefix_ids, -1, top1_token, top2_token)
+                result_entry['dla'] = dla_res
+            
+            # --- Gradient ---
+            if "gradient" in self.modes:
+                grad_res = self.run_gradient(prefix_ids, -1, top1_token, top2_token)
+                result_entry['gradient'] = grad_res
+            
+            # --- Patching ---
+            if "patching" in self.modes:
+                seq1 = torch.cat([prefix_ids, torch.tensor([[top1_token]], device=self.device)], dim=1)
+                seq2 = torch.cat([prefix_ids, torch.tensor([[top2_token]], device=self.device)], dim=1)
+                
+                patch_res = {}
+                for layer in self.patch_layers:
+                    effect = self.patch_and_measure(seq2, seq1, layer)
+                    patch_res[layer] = effect
+                result_entry['patching'] = patch_res
+            
+            all_results.append(result_entry)
+            
+            if (idx + 1) % checkpoint_interval == 0:
+                with open(checkpoint_file, 'w') as f:
+                    json.dump(all_results, f, indent=2)
+                log.info(f"Checkpointed {len(all_results)} results")
+            
+        with open(self.output_dir / "random_baseline_full.json", 'w') as f:
+            json.dump(all_results, f, indent=2)
+            
+        if checkpoint_file.exists():
+            checkpoint_file.unlink()
+            
+        log.info("Analysis complete.")
+        log.info(f"Saved {len(all_results)} entries to {self.output_dir / 'random_baseline_full.json'}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run Random Baseline Analysis")
+    parser.add_argument("--config", type=str, 
+                       default="configs/mech_interp/dla_patching_config.yaml",
+                       help="Path to config file")
+    parser.add_argument("--modes", nargs="+", choices=["dla", "gradient", "patching"],
+                        default=["dla", "gradient", "patching"],
+                        help="Analysis modes to run (default: all)")
+    
+    args = parser.parse_args()
+    
+    exp = RandomBaselineExperiment(args.config, modes=args.modes)
+    exp.run_experiment()
         self.dtype = torch.float16 if self.config['model']['dtype'] == 'float16' else torch.float32
         
         # Load model and tokenizer
@@ -179,6 +281,7 @@ class RandomBaselineExperiment:
             if z_curr.dim() == 0:
                  # If it collapsed to scalar, something is wrong with extraction
                  log.error(f"Layer {layer_idx} extracted z_curr is scalar: {z_curr}")
+                 # Try to fallback? No this is critical.
             
             if prev_z is None:
                 delta_z = z_curr # Layer 0 accumulation
@@ -338,35 +441,30 @@ class RandomBaselineExperiment:
                 top1_token = topk.indices[0].item()
                 top2_token = topk.indices[1].item()
                 
-            result_entry = {
+            # --- DLA ---
+            dla_res = self.run_dla(prefix_ids, -1, top1_token, top2_token)
+            
+            # --- Gradient ---
+            grad_res = self.run_gradient(prefix_ids, -1, top1_token, top2_token)
+            
+            # --- Patching ---
+            seq1 = torch.cat([prefix_ids, torch.tensor([[top1_token]], device=self.device)], dim=1)
+            seq2 = torch.cat([prefix_ids, torch.tensor([[top2_token]], device=self.device)], dim=1)
+            
+            patch_res = {}
+            for layer in self.patch_layers:
+                effect = self.patch_and_measure(seq2, seq1, layer)
+                patch_res[layer] = effect
+            
+            all_results.append({
                 'problem_id': prob['problem_id'],
                 'cutoff_pos': cutoff_pos,
                 'top1_token': top1_token,
                 'top2_token': top2_token,
-            }
-
-            # --- DLA ---
-            if "dla" in self.modes:
-                dla_res = self.run_dla(prefix_ids, -1, top1_token, top2_token)
-                result_entry['dla'] = dla_res
-            
-            # --- Gradient ---
-            if "gradient" in self.modes:
-                grad_res = self.run_gradient(prefix_ids, -1, top1_token, top2_token)
-                result_entry['gradient'] = grad_res
-            
-            # --- Patching ---
-            if "patching" in self.modes:
-                seq1 = torch.cat([prefix_ids, torch.tensor([[top1_token]], device=self.device)], dim=1)
-                seq2 = torch.cat([prefix_ids, torch.tensor([[top2_token]], device=self.device)], dim=1)
-                
-                patch_res = {}
-                for layer in self.patch_layers:
-                    effect = self.patch_and_measure(seq2, seq1, layer)
-                    patch_res[layer] = effect
-                result_entry['patching'] = patch_res
-            
-            all_results.append(result_entry)
+                'dla': dla_res,
+                'gradient': grad_res,
+                'patching': patch_res
+            })
             
             if (idx + 1) % checkpoint_interval == 0:
                 with open(checkpoint_file, 'w') as f:
@@ -387,11 +485,8 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, 
                        default="configs/mech_interp/dla_patching_config.yaml",
                        help="Path to config file")
-    parser.add_argument("--modes", nargs="+", choices=["dla", "gradient", "patching"],
-                        default=["dla", "gradient", "patching"],
-                        help="Analysis modes to run (default: all)")
     
     args = parser.parse_args()
     
-    exp = RandomBaselineExperiment(args.config, modes=args.modes)
+    exp = RandomBaselineExperiment(args.config)
     exp.run_experiment()
