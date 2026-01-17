@@ -67,6 +67,7 @@ class ClusteringExperiment:
         
         # Experiment config
         self.extraction_layer = self.config.get('extraction_layer', 20)
+        self.extraction_position = self.config.get('extraction_position', 16)
         self.k_values = self.config.get('k_values', [16, 32, 64])
         self.l_values = self.config.get('l_values', [16, 32, 64])
         self.temperature = self.config.get('temperature', 0.6)
@@ -82,25 +83,29 @@ class ClusteringExperiment:
         api_config = self.config.get('api', {})
         if not api_config:
             raise ValueError("API configuration required for continuation generation")
-        
-        # Get API key environment variable name from config
-        api_key_env = api_config.get('api_key_env', 'OPENROUTER_API_KEY')
-        
-        # Verify API key is available in environment
-        api_key = os.getenv(api_key_env)
-        if not api_key:
-            raise ValueError(
-                f"API Key not found in environment variable: {api_key_env}. "
-                f"Please set {api_key_env} environment variable with your OpenRouter API key."
-            )
-        log.info(f"API key found in environment variable: {api_key_env}")
-        
+
+        # Support both direct API key and environment variable lookup
+        if 'api_key' in api_config and api_config['api_key']:
+            log.info("Using direct API key from config")
+            api_key_value = api_config['api_key']
+        elif 'api_key_env' in api_config and api_config['api_key_env']:
+            api_key_env = api_config['api_key_env']
+            api_key_value = os.getenv(api_key_env)
+            if not api_key_value:
+                raise ValueError(
+                    f"API Key not found in environment variable: {api_key_env}. "
+                    f"Please set {api_key_env} environment variable with your OpenRouter API key."
+                )
+            log.info(f"API key found in environment variable: {api_key_env}")
+        else:
+            raise ValueError("Either 'api_key' or 'api_key_env' must be specified in API config")
+
         api_model_cfg = DictConfig({
             'type': 'api',
             'provider': 'openrouter',
             'model_name': api_config.get('model_name', 'qwen/qwen3-8b'),
             'base_url': api_config.get('base_url', 'https://openrouter.ai/api/v1'),
-            'api_key_env': api_key_env
+            'api_key': api_key_value
         })
         
         log.info(f"Initializing API model for continuation: {api_model_cfg.model_name}")
@@ -108,6 +113,7 @@ class ClusteringExperiment:
         self.api_model = APIModel(api_model_cfg)
         
         log.info(f"Extraction layer: {self.extraction_layer}")
+        log.info(f"Extraction position: {self.extraction_position} (tokens after prompt)")
         log.info(f"k values: {self.k_values}")
         log.info(f"l values: {self.l_values}")
 
@@ -191,23 +197,25 @@ class ClusteringExperiment:
             prompt_len = prompt_ids.shape[1]
             
             # Step 1: Generate k prefixes of length l and extract activations
+            # We need to generate at least extraction_position tokens to reach the extraction point
+            actual_generation_length = max(l, self.extraction_position)
+            extraction_pos = prompt_len + self.extraction_position
+
             # Store prefix_ids temporarily, but we'll only keep representatives after clustering
             activations = []
             all_prefix_ids = []  # Temporary storage during generation
-            
+
             for i in range(k):
-                prefix_ids = self.generate_prefix(prompt_ids, l)
+                prefix_ids = self.generate_prefix(prompt_ids, actual_generation_length)
                 all_prefix_ids.append(prefix_ids)
-                
-                # Extract activation at position l (after generating l tokens)
-                # prefix_ids has shape [1, prompt_len + l]
-                # We want activation at the last position (after l tokens generated)
-                extract_position = prefix_ids.shape[1] - 1
-                activation = self.get_layer_activation(prefix_ids, extract_position)
+
+                # Extract activation at the specified position after prompt
+                # extraction_pos = prompt_len + extraction_position
+                activation = self.get_layer_activation(prefix_ids, extraction_pos)
                 if activation is not None:
                     activations.append(activation)
                 else:
-                    log.warning(f"Failed to extract activation at position {extract_position} for prefix {i}")
+                    log.warning(f"Failed to extract activation at position {extraction_pos} for prefix {i}")
             
             if len(activations) < k:
                 return {'id': item['id'], 'k': k, 'l': l, 'error': f'Only got {len(activations)}/{k} activations'}
@@ -369,6 +377,7 @@ class ClusteringExperiment:
             all_results = {
                 'model_id': self.config['model']['model_id'],
                 'extraction_layer': self.extraction_layer,
+                'extraction_position': self.extraction_position,
                 'results_per_config': {}
             }
         

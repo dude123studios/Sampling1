@@ -20,6 +20,7 @@ model:
 
 # Experiment parameters
 extraction_layer: 20  # Layer number to extract activations from (configurable, default: 20)
+extraction_position: 16  # Position to extract activations at (relative to prompt end, e.g., prompt_len + 16)
 k_values: [32]  # Number of prefixes to generate (sweep across these values)
 l_values: [16, 32, 64]  # Prefix lengths in tokens (sweep across these values)
 
@@ -47,4 +48,4 @@ output_dir: "results/improvement_methods/clustering"
 api:
   model_name: "qwen/qwen3-8b"  # Model to use for continuation generation
   base_url: "https://openrouter.ai/api/v1"
-  api_key_env: "OPENROUTER_API_KEY"
+  api_key: "your-openrouter-api-key-here"  # Replace with your actual API key

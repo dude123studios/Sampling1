@@ -7,10 +7,17 @@ from .base import BaseModel
 class APIModel(BaseModel):
     def __init__(self, config):
         super().__init__(config)
-        self.api_key = os.getenv(config.api_key_env)
-        if not self.api_key:
-            raise ValueError(f"API Key not found in environment variable: {config.api_key_env}")
-            
+
+        # Support both direct API key and environment variable lookup
+        if hasattr(config, 'api_key') and config.api_key:
+            self.api_key = config.api_key
+        elif hasattr(config, 'api_key_env') and config.api_key_env:
+            self.api_key = os.getenv(config.api_key_env)
+            if not self.api_key:
+                raise ValueError(f"API Key not found in environment variable: {config.api_key_env}")
+        else:
+            raise ValueError("Either 'api_key' or 'api_key_env' must be specified in config")
+
         self.base_url = config.base_url
         self.model_name = config.model_name
         

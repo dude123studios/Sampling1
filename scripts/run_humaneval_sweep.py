@@ -74,8 +74,9 @@ def process_item(i, item, model, cfg, evaluator):
         num_samples_to_generate = cfg['parameters']['num_samples']
         batch_size = 5 # Request 5 samples per call to allow for large tokens
         
-        for batch_start in range(0, num_samples_to_generate, batch_size):
-            current_batch_size = min(batch_size, num_samples_to_generate - batch_start)
+        while len(problem_outputs) < num_samples_to_generate:
+            needed = num_samples_to_generate - len(problem_outputs)
+            current_batch_size = min(batch_size, needed)
             
             # Convert method to DictConfig
             method_cfg = DictConfig(cfg['method'])
