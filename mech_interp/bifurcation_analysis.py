@@ -47,22 +47,22 @@ def load_problem_directly(problem_id: int = 24):
 def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, layer_idx: int, device: str):
     """Extract hidden state at specific position and layer. Keep on GPU for efficiency."""
     try:
-        inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
-        input_ids = inputs['input_ids']
+    inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
+    input_ids = inputs['input_ids']
 
-        seq_len = input_ids.shape[1]
+    seq_len = input_ids.shape[1]
         actual_pos = min(token_pos, seq_len - 1)  # Ensure valid position
 
-        hidden_state = None
+    hidden_state = None
 
-        def hook_fn(module, input, output):
-            nonlocal hidden_state
+    def hook_fn(module, input, output):
+        nonlocal hidden_state
             try:
-                hidden = output[0] if isinstance(output, tuple) else output
+        hidden = output[0] if isinstance(output, tuple) else output
                 # Extract on GPU, only move to CPU at the end
-                if hidden.shape[1] > actual_pos:
+        if hidden.shape[1] > actual_pos:
                     hidden_state = hidden[0, actual_pos, :].detach()  # Keep on GPU
-                else:
+        else:
                     hidden_state = hidden[0, -1, :].detach()  # Keep on GPU
                 
                 # Check for NaN/Inf and fix immediately (prevent propagation)
@@ -76,12 +76,12 @@ def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, lay
                 log.error(f"Error in hook: {e}")
                 hidden_state = None
 
-        hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
+    hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
 
-        with torch.no_grad():
-            _ = model(input_ids)
+    with torch.no_grad():
+        _ = model(input_ids)
 
-        hook.remove()
+    hook.remove()
         
         if hidden_state is None:
             log.error(f"Failed to extract hidden state, returning zeros")
@@ -154,7 +154,7 @@ Solution:
         os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
         
         generated_solutions = []
-        with torch.no_grad():
+            with torch.no_grad():
             for _ in tqdm(range(n_samples), desc="Generating"):
                 # Only pass sampling params when do_sample=True
                 gen_kwargs = {
@@ -217,16 +217,32 @@ Solution:
                 # Build full sequence: prompt + solution
                 full_tokens = prompt_token_ids + solution_tokens
                 
-                # Extract at position token_pos (0-indexed, so token_pos-1 is the token at that position)
-                # But we need at least token_pos tokens total
-                if len(full_tokens) < token_pos:
-                    log.warning(f"Sample {i}: Only {len(full_tokens)} tokens, need {token_pos}. Using all tokens.")
+                # CRITICAL FIX: If prompt is longer than token_pos, we're extracting from prompt (all identical!)
+                # We MUST extract from solution tokens to get variance between samples
+                if prompt_len >= token_pos:
+                    # Prompt is too long - we need to extract from solution tokens
+                    # Extract at position: prompt_len + a few tokens into solution (to ensure variance)
+                    # Use at least 1 token into solution, but prefer a few more
+                    solution_offset = max(1, min(5, len(solution_tokens)))
+                    extract_pos = prompt_len + solution_offset - 1  # -1 because we want the token at this position
+                    # But ensure we don't go beyond available tokens
+                    extract_pos = min(extract_pos, len(full_tokens) - 1)
+                    # We need at least extract_pos+1 tokens to extract at that position
+                    prefix_tokens = full_tokens[:extract_pos + 1]
+                    if i == 0:  # Log once
+                        log.info(f"Prompt length ({prompt_len}) >= token_pos ({token_pos}). Extracting at position {extract_pos} (in solution) to ensure variance.")
+                elif len(full_tokens) < token_pos:
+                    # Not enough tokens total - use what we have
                     prefix_tokens = full_tokens
                     extract_pos = len(full_tokens) - 1  # Last token
-                else:
-                    # Use exactly token_pos tokens (prompt + first part of solution)
+                    if i == 0:
+                        log.warning(f"Sample {i}: Only {len(full_tokens)} tokens, need {token_pos}. Using all tokens.")
+        else:
+                    # Normal case: prompt is shorter than token_pos, so we include solution tokens
                     prefix_tokens = full_tokens[:token_pos]
                     extract_pos = token_pos - 1  # Extract at the token_pos-th token (0-indexed)
+                    if i == 0:
+                        log.info(f"Extracting at position {extract_pos} (prompt_len={prompt_len}, token_pos={token_pos})")
                 
                 # Convert to tensor
                 prefix_tensor = torch.tensor([prefix_tokens], device=device)
@@ -350,7 +366,13 @@ Solution:
                     diff = np.mean(np.abs(hidden_states_f64[i] - hidden_states_f64[j]))
                     sample_diffs.append(diff)
             if sample_diffs:
-                log.info(f"Mean difference between first 5 samples: {np.mean(sample_diffs):.6f}")
+                mean_diff = np.mean(sample_diffs)
+                log.info(f"Mean difference between first 5 samples: {mean_diff:.6f}")
+                if mean_diff < 1e-6:
+                    log.error("CRITICAL: All hidden states are nearly identical! This means we're extracting from the same position (likely prompt).")
+                    log.error(f"Prompt length: {prompt_len}, token_pos: {token_pos}")
+                    log.error("This will cause zero variance in PCA. Check extraction logic.")
+                    raise ValueError("All hidden states are identical - extraction position is wrong")
             
             # Remove features with zero variance (they don't contribute to PCA)
             feature_vars = np.var(hidden_states_f64, axis=0)
@@ -491,7 +513,7 @@ Solution:
             else:
                 results_to_save[k] = v
         
-        with open(output_dir / f"{model_name}_results.json", 'w') as f:
+    with open(output_dir / f"{model_name}_results.json", 'w') as f:
             json.dump(results_to_save, f, indent=2)
         log.info(f"Saved results to {output_dir / f'{model_name}_results.json'}")
     except Exception as e:
