@@ -51,24 +51,24 @@ def load_problem_directly(problem_id: int = 24):
 def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, layer_idx: int, device: str):
     """Extract hidden state at specific position and layer. Keep on GPU for efficiency."""
     try:
-    inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
-    input_ids = inputs['input_ids']
+        inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
+        input_ids = inputs['input_ids']
 
-    seq_len = input_ids.shape[1]
+        seq_len = input_ids.shape[1]
         actual_pos = min(token_pos, seq_len - 1)  # Ensure valid position
 
-    hidden_state = None
+        hidden_state = None
 
-    def hook_fn(module, input, output):
-        nonlocal hidden_state
+        def hook_fn(module, input, output):
+            nonlocal hidden_state
             try:
-        hidden = output[0] if isinstance(output, tuple) else output
+                hidden = output[0] if isinstance(output, tuple) else output
                 # Extract on GPU, only move to CPU at the end
-        if hidden.shape[1] > actual_pos:
+                if hidden.shape[1] > actual_pos:
                     hidden_state = hidden[0, actual_pos, :].detach()  # Keep on GPU
-        else:
+                else:
                     hidden_state = hidden[0, -1, :].detach()  # Keep on GPU
-                
+
                 # Check for NaN/Inf and fix immediately (prevent propagation)
                 if hidden_state is not None:
                     nan_count = torch.sum(torch.isnan(hidden_state)).item()
@@ -80,18 +80,18 @@ def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, lay
                 log.error(f"Error in hook: {e}")
                 hidden_state = None
 
-    hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
+        hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
 
-    with torch.no_grad():
-        _ = model(input_ids)
+        with torch.no_grad():
+            _ = model(input_ids)
 
-    hook.remove()
-        
+        hook.remove()
+
         if hidden_state is None:
             log.error(f"Failed to extract hidden state, returning zeros")
             hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
             return torch.zeros(hidden_dim, device=device)  # Keep on GPU
-        
+
         # Move to CPU only at the very end
         return hidden_state.cpu()
     except Exception as e:
@@ -261,7 +261,10 @@ Solution:
         api_model = DirectAPIModel(api_model_cfg)
         max_workers = api_config.get('max_workers', 15)
         log.info(f"Using {max_workers} threads for generation")
-        
+
+        samples_to_generate = n_samples
+        log.info(f"Will generate {samples_to_generate} samples")
+
         # Generate solutions in parallel
         def generate_one_solution(idx):
             try:
@@ -311,8 +314,8 @@ Solution:
         labels = []
         for i, sol in enumerate(outputs):
             if sol and sol.strip():  # Only grade non-empty solutions
-            is_correct = grade_math(sol, problem['answer'])
-            labels.append(1 if is_correct else 0)
+                is_correct = grade_math(sol, problem['answer'])
+                labels.append(1 if is_correct else 0)
             else:
                 # Failed generation or empty response
                 labels.append(0)  # Count as incorrect
@@ -343,7 +346,7 @@ Solution:
     else:
         # Should not happen with new logic, but kept for safety
         if len(labels) == 0:
-        labels = [1 if c else 0 for c in problem['correctness']]
+            labels = [1 if c else 0 for c in problem['correctness']]
 
     correct_count = sum(labels)
     total_count = len(labels)
@@ -367,8 +370,11 @@ Solution:
     hidden_states = []
     
     with torch.no_grad():
+        log.info(f"STARTING EXTRACTION: Processing {len(outputs)} solutions")
         for i, solution in enumerate(tqdm(outputs, desc="Extracting hidden states")):
             extraction_count += 1
+            if i % 20 == 0:
+                log.info(f"Processing solution {i+1}/{len(outputs)}")
             try:
                 # CRITICAL: Extract at position extraction_pos = prompt_len + token_pos
                 # token_pos tokens into the solution (after the prompt)
@@ -389,7 +395,7 @@ Solution:
                     extract_pos = max(0, len(full_tokens) - 1)  # Last available token (at least 0)
                     if i == 0:
                         log.warning(f"Sample {i}: Only {len(full_tokens)} tokens, need {extraction_pos}. Using position {extract_pos}.")
-        else:
+                else:
                     # Use exactly extraction_pos tokens (prompt + solution tokens up to extraction_pos)
                     prefix_tokens = full_tokens[:extraction_pos]
                     extract_pos = extraction_pos - 1  # Extract at position extraction_pos-1 (the extraction_pos-th token, 0-indexed)
@@ -679,8 +685,8 @@ Solution:
                     results_to_save[k] = float(v)
             else:
                 results_to_save[k] = v
-        
-    with open(output_dir / f"{model_name}_results.json", 'w') as f:
+
+        with open(output_dir / f"{model_name}_results.json", 'w') as f:
             json.dump(results_to_save, f, indent=2)
         log.info(f"Saved results to {output_dir / f'{model_name}_results.json'}")
     except Exception as e:
