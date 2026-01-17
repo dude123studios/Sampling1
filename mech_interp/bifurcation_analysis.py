@@ -116,11 +116,11 @@ Solution:
 
     # Get generation parameters (used for both temperature sampling and greedy)
     max_new_tokens = cfg['analysis'].get('max_new_tokens', 4096)
+    temp = cfg['analysis'].get('temperature', 0.6)  # Get temperature for results
     
     # Generate samples if none exist
     if not outputs:
         n_samples = cfg['analysis'].get('n_samples', 20)
-        temp = cfg['analysis'].get('temperature', 0.6)
         log.info(f"Generating {n_samples} samples for Problem {problem_id} (temp={temp}, max_tokens={max_new_tokens})...")
         log.info(f"Temperature sampling enabled: do_sample=True, temperature={temp}")
         
@@ -261,12 +261,18 @@ Solution:
         'labels': labels,
         'greedy_2d': greedy_2d,
         'greedy_correct': greedy_correct,
+        'greedy_solution': greedy_solution,  # Save greedy solution text
+        'solutions': outputs,  # Save all generated solution texts
         'explained_variance': explained_variance,
         'n_success': int(labels.sum()),
         'n_fail': int(len(labels) - labels.sum()),
         'problem_id': problem['problem_id'],
+        'problem_text': problem['problem'],  # Save problem text for reference
+        'gold_answer': problem['answer'],  # Save gold answer
         'layer_idx': layer_idx,
-        'token_position': token_pos
+        'token_position': token_pos,
+        'temperature': temp,
+        'n_samples': len(outputs)
     }
 
     # Save and plot
