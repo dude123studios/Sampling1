@@ -35,7 +35,11 @@ analysis:
   layer_idx: 10  # Extract from layer 10
 ```
 
-**Note**: Uses existing sweep data with 5 samples (finds problems with exactly 1/5 correct)
+**Note**:
+- Uses existing sweep data with 5 samples
+- Automatically finds level 5 problems with 1-2/5 solve rate
+- Qwen found: `test/intermediate_algebra/1994.json` (1/5)
+- DeepSeek found: `test/intermediate_algebra/1994.json` (2/5)
 
 ## Output
 

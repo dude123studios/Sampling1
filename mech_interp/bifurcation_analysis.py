@@ -46,9 +46,14 @@ def load_sweep_problem(sweep_dir: Path, temperature: str, model_filter: str):
     for run_dir in matching_dirs:
         log_file = run_dir / 'log.jsonl'
         if not log_file.exists():
+            log.warning(f"No log file in {run_dir.name}")
             continue
 
         log.info(f"Searching in: {run_dir.name}")
+
+        problem_count = 0
+        level5_count = 0
+        hard_count = 0
 
         with open(log_file) as f:
             for line in f:
@@ -59,15 +64,23 @@ def load_sweep_problem(sweep_dir: Path, temperature: str, model_filter: str):
                     if entry.get('type') == 'summary':
                         continue
 
-                    # Check for problem with exactly 1/5 correct (20% pass rate)
+                    problem_count += 1
+
+                    # Check for level 5 problem with 1-2/5 correct
                     if 'outputs' in entry and 'scores' in entry:
+                        level = entry.get('level')
                         scores = entry['scores']
                         n = len(scores)
                         c = sum(scores)
 
-                        if c == 1 and n == 5:  # Exactly 1 correct out of 5
+                        if level == 5:
+                            level5_count += 1
+
+                        # Level 5 with 1 or 2 correct out of 5
+                        if level == 5 and c in [1, 2] and n == 5:
+                            hard_count += 1
                             dataset_id = entry.get('dataset_id', '')
-                            log.info(f"Found hard problem: {dataset_id} (1/5 correct)")
+                            log.info(f"Found level 5 hard problem: {dataset_id} ({c}/5 correct)")
 
                             # Load actual problem from dataset
                             from datasets import load_dataset
@@ -81,19 +94,25 @@ def load_sweep_problem(sweep_dir: Path, temperature: str, model_filter: str):
                                     break
 
                             if not problem_text:
-                                log.warning(f"Could not find problem text for {dataset_id}")
+                                log.warning(f"Could not find problem text for {dataset_id} in dataset")
                                 continue
 
+                            log.info(f"Successfully loaded problem from dataset")
                             return {
                                 'problem_id': dataset_id,
                                 'problem': problem_text,
                                 'answer': entry.get('gold', ''),
                                 'outputs': entry['outputs'],
                                 'correctness': [bool(s) for s in scores],
-                                'level': entry.get('level', 5)
+                                'level': level
                             }
                 except Exception as e:
+                    log.debug(f"Error parsing entry: {e}")
                     continue
+
+        log.info(f"Scanned {problem_count} problems, {level5_count} level 5, {hard_count} hard (1-2/5)")
+
+    log.error("No suitable problem found")
 
     log.error("No suitable problem found")
     return None
