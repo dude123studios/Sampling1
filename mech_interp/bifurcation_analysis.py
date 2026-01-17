@@ -22,95 +22,27 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 
-def load_sweep_problem(sweep_dir: Path, temperature: str, model_filter: str):
-    """Load specific problem ID 24 from sweep results."""
-    log.info(f"Loading from {sweep_dir} (temp={temperature}, model={model_filter})")
-
-    # Look for specific directory pattern
-    pattern = f"*{model_filter}*temp{temperature}*"
-    all_matching = list(sweep_dir.glob(pattern))
-
-    matching_dirs = []
-    for d in all_matching:
-        if model_filter == "qwen3-8b" and "deepseek" in d.name:
-            continue
-        matching_dirs.append(d)
-
-    if not matching_dirs:
-        log.error(f"No matching directories for pattern: {pattern}")
+def load_problem_directly(problem_id: int = 24):
+    """Directly load problem 24 from MATH-500."""
+    log.info(f"Loading problem ID {problem_id} directly from HuggingFace (ignoring sweep data)...")
+    from datasets import load_dataset
+    dataset = load_dataset("HuggingFaceH4/MATH-500", split="test")
+    
+    # Assuming ID corresponds to index. 
+    # Logic: The sweep assigned IDs sequentially 0..499 matching the dataset index.
+    if problem_id >= len(dataset):
+        log.error(f"Problem ID {problem_id} out of range (0-{len(dataset)-1})")
         return None
-
-    target_id = 24
-    log.info(f"Searching for Problem ID {target_id} in {len(matching_dirs)} directories...")
-
-    for run_dir in matching_dirs:
-        log_file = run_dir / 'log.jsonl'
-        if not log_file.exists():
-            continue
-
-        with open(log_file) as f:
-            for line in f:
-                if not line.strip(): continue
-                try:
-                    entry = json.loads(line)
-                    # Support string or int ID comparison
-                    current_id = entry.get('id')
-                    try:
-                        current_id = int(str(current_id))
-                    except:
-                        pass
-                        
-                    if current_id == target_id:
-                        log.info(f"Found Problem ID {target_id} in {run_dir.name}")
-                        
-                        dataset_id = entry.get('dataset_id')
-                        
-                        # Load from HuggingFace
-                        log.info("Loading MATH-500 dataset from HuggingFace...")
-                        from datasets import load_dataset
-                        try:
-                            dataset = load_dataset("HuggingFaceH4/MATH-500", split="test")
-                        except Exception as e:
-                            log.error(f"Failed to load HF dataset: {e}")
-                            return None
-
-                        problem_text = None
-                        answer = None
-
-                        # Try to find by unique_id
-                        if dataset_id:
-                            for item in dataset:
-                                if item.get('unique_id') == dataset_id:
-                                    problem_text = item['problem']
-                                    answer = item['answer']
-                                    log.info(f"Matched dataset_id: {dataset_id}")
-                                    break
-                        
-                        # Fallback: Use index 24 if id match failed or dataset_id missing
-                        if not problem_text:
-                            log.warning(f"Could not match dataset_id '{dataset_id}'. Using index {target_id} from dataset.")
-                            try:
-                                item = dataset[target_id]
-                                problem_text = item['problem']
-                                answer = item['answer']
-                            except Exception as e:
-                                log.error(f"Failed to load index {target_id}: {e}")
-                                return None
-
-                        return {
-                            'problem_id': dataset_id or f"id_{target_id}",
-                            'problem': problem_text,
-                            'answer': answer,
-                            'outputs': entry.get('outputs', []),
-                            'correctness': [bool(s) for s in entry.get('scores', [])] if 'scores' in entry else entry.get('correctness', []),
-                            'level': entry.get('level', 0)
-                        }
-
-                except Exception as e:
-                    continue
-
-    log.error(f"Problem ID {target_id} not found in any logs.")
-    return None
+        
+    item = dataset[problem_id]
+    return {
+        'problem_id': f"id_{problem_id}",
+        'problem': item['problem'],
+        'answer': item['answer'],
+        'outputs': [], # Will generate these
+        'correctness': [],
+        'level': item.get('level', 0)
+    }
 
 def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, layer_idx: int, device: str):
     """Extract hidden state at specific position and layer."""
@@ -162,21 +94,11 @@ def run_bifurcation_analysis(config_path: str):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Load problem from sweep
-    sweep_dir = Path(cfg['data_source']['sweep_dir'])
-    problem = load_sweep_problem(
-        sweep_dir,
-        cfg['data_source']['temperature'],
-        cfg['data_source']['model_filter']
-    )
-
+    # Load problem directly (ID 24)
+    problem = load_problem_directly(24)
     if not problem:
-        log.error("No suitable problem found!")
-        return None
-
-    # Use existing solutions
-    outputs = problem['outputs']
-    labels = [1 if c else 0 for c in problem['correctness']]
+        log.error("Failed to load problem")
+        return
 
     # Build prompt
     prompt = f"""You are a helpful mathematical assistant. Solve the following problem step-by-step.
@@ -188,7 +110,53 @@ Problem:
 Solution:
 """
 
-    log.info(f"Extracting hidden states from {len(outputs)} solutions...")
+    outputs = problem['outputs']
+    labels = []
+
+    # Generate samples if none exist
+    if not outputs:
+        n_samples = cfg['analysis'].get('n_samples', 20)
+        log.info(f"Generating {n_samples} samples for Problem 24...")
+        
+        inputs = tokenizer(prompt, return_tensors="pt").to(device)
+        
+        batch_size = 5
+        generated_solutions = []
+        
+        for _ in tqdm(range(0, n_samples, batch_size), desc="Generating"):
+            curr_batch = min(batch_size, n_samples - len(generated_solutions))
+            with torch.no_grad():
+                gen_out = model.generate(
+                    **inputs,
+                    max_new_tokens=1024,
+                    do_sample=True,
+                    temperature=cfg['analysis'].get('temperature', 0.6),
+                    num_return_sequences=curr_batch,
+                    pad_token_id=tokenizer.pad_token_id
+                )
+            
+            # Decode
+            for seq in gen_out:
+                text = tokenizer.decode(seq, skip_special_tokens=True)
+                # Extract solution part (remove prompt)
+                sol = text[len(prompt):]
+                generated_solutions.append(sol)
+
+        outputs = generated_solutions
+        
+        # Grade them
+        log.info("Grading generated solutions...")
+        for sol in outputs:
+            is_correct = grade_math(sol, problem['answer'])
+            labels.append(1 if is_correct else 0)
+            
+    else:
+        # Should not happen with new logic, but kept for safety
+        labels = [1 if c else 0 for c in problem['correctness']]
+
+    log.info(f"Solutions: {len(outputs)}, Success rate: {sum(labels)/len(labels):.2%}")
+
+    log.info(f"Extracting hidden states...")
     hidden_states = []
 
     token_pos = cfg['analysis']['token_position']
