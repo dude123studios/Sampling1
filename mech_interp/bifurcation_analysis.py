@@ -368,7 +368,8 @@ Solution:
     
     # Extract hidden states at token_position (exactly after token_pos tokens)
     hidden_states = []
-    
+    extraction_count = 0
+
     with torch.no_grad():
         log.info(f"STARTING EXTRACTION: Processing {len(outputs)} solutions")
         for i, solution in enumerate(tqdm(outputs, desc="Extracting hidden states")):
