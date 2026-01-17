@@ -47,23 +47,23 @@ def load_problem_directly(problem_id: int = 24):
 def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, layer_idx: int, device: str):
     """Extract hidden state at specific position and layer. Keep on GPU for efficiency."""
     try:
-    inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
-    input_ids = inputs['input_ids']
+        inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
+        input_ids = inputs['input_ids']
 
-    seq_len = input_ids.shape[1]
+        seq_len = input_ids.shape[1]
         actual_pos = min(token_pos, seq_len - 1)  # Ensure valid position
 
-    hidden_state = None
+        hidden_state = None
 
-    def hook_fn(module, input, output):
-        nonlocal hidden_state
+        def hook_fn(module, input, output):
+            nonlocal hidden_state
             try:
-        hidden = output[0] if isinstance(output, tuple) else output
+                hidden = output[0] if isinstance(output, tuple) else output
                 # Extract on GPU, only move to CPU at the end
-        if hidden.shape[1] > actual_pos:
-                     hidden_state = hidden[0, actual_pos, :].detach()  # Keep on GPU
-        else:
-                     hidden_state = hidden[0, -1, :].detach()  # Keep on GPU
+                if hidden.shape[1] > actual_pos:
+                    hidden_state = hidden[0, actual_pos, :].detach()  # Keep on GPU
+                else:
+                    hidden_state = hidden[0, -1, :].detach()  # Keep on GPU
                 
                 # Check for NaN/Inf and fix immediately (prevent propagation)
                 if hidden_state is not None:
@@ -76,12 +76,12 @@ def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, lay
                 log.error(f"Error in hook: {e}")
                 hidden_state = None
 
-    hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
+        hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
 
-    with torch.no_grad():
-        _ = model(input_ids)
+        with torch.no_grad():
+            _ = model(input_ids)
 
-    hook.remove()
+        hook.remove()
         
         if hidden_state is None:
             log.error(f"Failed to extract hidden state, returning zeros")
