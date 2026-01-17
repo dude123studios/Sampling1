@@ -81,19 +81,6 @@ class ClusteringExperiment:
         log.info(f"k values: {self.k_values}")
         log.info(f"l values: {self.l_values}")
 
-    def find_baseline_logs(self):
-        """Find appropriate baseline logs or None."""
-        if self.config.get('source_results'):
-            return self.config['source_results']
-            
-        sweeps_dir = Path("results/sweeps")
-        if sweeps_dir.exists():
-            all_logs = sorted(sweeps_dir.glob("**/log.jsonl"), key=lambda x: x.stat().st_mtime, reverse=True)
-            if all_logs:
-                log.info(f"Auto-detected recent sweep log: {all_logs[0]}")
-                return str(all_logs[0])
-        return None
-
     def get_layer_activation(self, input_ids, position):
         """Get activation from specified layer at given position."""
         activation = None
@@ -256,95 +243,28 @@ class ClusteringExperiment:
             return {'id': item['id'], 'k': k, 'l': l, 'error': str(e)}
 
     def run_experiment(self, max_workers=40):
-        # 1. Load Baseline Data
-        source_file = self.find_baseline_logs()
-        
-        candidates = []
-        
-        if source_file and os.path.exists(source_file):
-            log.info(f"Loading baseline from {source_file}")
-            with open(source_file, 'r') as f:
-                for line in f:
-                    try:
-                        entry = json.loads(line)
-                        if 'scores' in entry:
-                            correct_count = sum(entry['scores'])
-                            min_c = self.config['filter_criteria']['min_correct']
-                            max_c = self.config['filter_criteria']['max_correct']
-                            
-                            if min_c <= correct_count <= max_c:
-                                correct_indices = [i for i, s in enumerate(entry['scores']) if s > 0]
-                                if correct_indices:
-                                    idx = correct_indices[0]
-                                    candidate = {
-                                        'id': entry['id'],
-                                        'dataset_id': entry.get('dataset_id'),
-                                        'gold': entry['gold'],
-                                        'baseline_accuracy': correct_count / len(entry['scores'])
-                                    }
-                                    candidates.append(candidate)
-                    except Exception as e:
-                        pass
-        else:
-            sweeps_base = Path("results/sweeps")
-            if sweeps_base.exists():
-                all_logs = sorted(sweeps_base.glob("**/log.jsonl"), key=lambda x: x.stat().st_mtime, reverse=True)
-                if all_logs:
-                    log.info(f"Auto-detected recent sweep log: {all_logs[0]}")
-                    source_file = str(all_logs[0])
-                    with open(source_file, 'r') as f:
-                        for line in f:
-                            try:
-                                entry = json.loads(line)
-                                if 'scores' in entry:
-                                    correct_count = sum(entry['scores'])
-                                    min_c = self.config['filter_criteria']['min_correct']
-                                    max_c = self.config['filter_criteria']['max_correct']
-                                    if min_c <= correct_count <= max_c:
-                                        correct_indices = [i for i, s in enumerate(entry['scores']) if s > 0]
-                                        if correct_indices:
-                                            idx = correct_indices[0]
-                                            candidate = {
-                                                'id': entry['id'],
-                                                'dataset_id': entry.get('dataset_id'),
-                                                'gold': entry['gold'],
-                                                'baseline_accuracy': correct_count / len(entry['scores'])
-                                            }
-                                            candidates.append(candidate)
-                            except: pass
-            
-            if not candidates:
-                log.error("No baseline logs found and no candidates extracted. Please run a baseline sweep first.")
-                return
-
-        log.info(f"Found {len(candidates)} candidate problems matching criteria {self.config['filter_criteria']}")
-        
-        # Load full task data to get problem text
+        # Load task data directly from dataset (filtered by level 5)
         from src.data.loader import load_task_data
         task_cfg = DictConfig(self.config['task'])
         full_data = load_task_data(task_cfg)
         
-        # Maps
-        id_to_item = {}
-        for i, item in enumerate(full_data):
-            id_to_item[str(i)] = item
-            id_to_item[i] = item
-
-        valid_candidates = []
-        for cand in candidates:
-            original = None
-            if 'dataset_id' in cand and cand['dataset_id']: 
-                original = id_to_item.get(cand['dataset_id']) or id_to_item.get(str(cand['dataset_id']))
-            
-            if not original:
-                original = id_to_item.get(cand['id'])
-                
-            if original:
-                cand['original_item'] = original
-                valid_candidates.append(cand)
+        log.info(f"Loaded {len(full_data)} Level 5 problems from dataset")
         
-        candidates = valid_candidates
-        log.info(f"Matched {len(candidates)} candidates with original problem text.")
+        # Convert to candidate format
+        candidates = []
+        for i, item in enumerate(full_data):
+            # Get gold answer (answer field in MATH-500)
+            gold = item.get('answer', item.get('solution', ''))
+            
+            candidate = {
+                'id': i,
+                'dataset_id': item.get('unique_id', str(i)),
+                'gold': gold,
+                'original_item': item
+            }
+            candidates.append(candidate)
+        
+        log.info(f"Prepared {len(candidates)} Level 5 problems for clustering experiment")
         
         # Setup Experiment
         results = {

@@ -2,13 +2,13 @@
 # This experiment generates k prefixes of length l, extracts layer activations,
 # clusters them using HDBSCAN, and continues generation from cluster representatives
 
-# Source experiment results (can be path to specific log.jsonl or will be auto-detected)
-source_results: null  # Will auto-detect most recent if null
+# Source experiment results - not used, we load directly from dataset
+# source_results: null
 
-# Filter criteria for selecting problems
-filter_criteria:
-  min_correct: 1  # At least 1 correct
-  max_correct: 2  # At most 2 correct (not too easy, not too hard)
+# No filter criteria - we use all level 5 problems
+# filter_criteria:
+#   min_correct: 1
+#   max_correct: 2
 
 # Model configuration (local HuggingFace model)
 model:
@@ -20,7 +20,7 @@ model:
 
 # Experiment parameters
 extraction_layer: 20  # Layer number to extract activations from (configurable, default: 20)
-k_values: [16, 32, 64]  # Number of prefixes to generate (sweep across these values)
+k_values: [32]  # Number of prefixes to generate (sweep across these values)
 l_values: [16, 32, 64]  # Prefix lengths in tokens (sweep across these values)
 
 # Generation parameters
@@ -38,7 +38,7 @@ task:
   name: "math"
   dataset: "HuggingFaceH4/MATH-500"
   split: "test"
-  level_filter: null  # Use all levels, or set to 5 for hardest only
+  level_filter: 5  # Only use Level 5 (hardest) problems
 
 # Output directory
 output_dir: "results/improvement_methods/clustering"
