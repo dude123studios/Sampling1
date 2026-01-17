@@ -47,22 +47,22 @@ def load_problem_directly(problem_id: int = 24):
 def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, layer_idx: int, device: str):
     """Extract hidden state at specific position and layer. Keep on GPU for efficiency."""
     try:
-        inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
-        input_ids = inputs['input_ids']
+    inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
+    input_ids = inputs['input_ids']
 
-        seq_len = input_ids.shape[1]
+    seq_len = input_ids.shape[1]
         actual_pos = min(token_pos, seq_len - 1)  # Ensure valid position
 
-        hidden_state = None
+    hidden_state = None
 
-        def hook_fn(module, input, output):
-            nonlocal hidden_state
+    def hook_fn(module, input, output):
+        nonlocal hidden_state
             try:
-                hidden = output[0] if isinstance(output, tuple) else output
+        hidden = output[0] if isinstance(output, tuple) else output
                 # Extract on GPU, only move to CPU at the end
-                if hidden.shape[1] > actual_pos:
+        if hidden.shape[1] > actual_pos:
                      hidden_state = hidden[0, actual_pos, :].detach()  # Keep on GPU
-                else:
+        else:
                      hidden_state = hidden[0, -1, :].detach()  # Keep on GPU
                 
                 # Check for NaN/Inf and fix immediately (prevent propagation)
@@ -76,12 +76,12 @@ def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, lay
                 log.error(f"Error in hook: {e}")
                 hidden_state = None
 
-        hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
+    hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
 
-        with torch.no_grad():
-            _ = model(input_ids)
+    with torch.no_grad():
+        _ = model(input_ids)
 
-        hook.remove()
+    hook.remove()
         
         if hidden_state is None:
             log.error(f"Failed to extract hidden state, returning zeros")
@@ -154,7 +154,7 @@ Solution:
         os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
         
         generated_solutions = []
-        with torch.no_grad():
+            with torch.no_grad():
             for _ in tqdm(range(n_samples), desc="Generating"):
                 # Only pass sampling params when do_sample=True
                 gen_kwargs = {
@@ -194,7 +194,7 @@ Solution:
     log.info(f"Extracting hidden states from {len(outputs)} solutions...")
     token_pos = cfg['analysis']['token_position']
     layer_idx = cfg['analysis']['layer_idx']
-    
+
     # Pre-tokenize prompt once
     prompt_tokens = tokenizer.encode(prompt, add_special_tokens=False)
     prompt_len = len(prompt_tokens)
@@ -210,34 +210,35 @@ Solution:
     with torch.no_grad():
         for i, solution in enumerate(tqdm(outputs, desc="Extracting hidden states")):
             try:
-                # We only need tokens up to token_pos (which includes prompt + some solution tokens)
-                # Tokenize just enough of the solution to reach token_pos total
+                # CRITICAL: We need to include solution tokens to get variance!
+                # token_pos is the position in the FULL sequence (prompt + solution) where we extract
                 solution_tokens = tokenizer.encode(solution, add_special_tokens=False)
                 
-                # Calculate how many solution tokens we need
-                tokens_needed = max(0, token_pos - prompt_len)
-                if tokens_needed > 0 and len(solution_tokens) > 0:
-                    # Take only the first tokens_needed tokens from solution
-                    prefix_solution_tokens = solution_tokens[:tokens_needed]
-                    prefix_tokens = prompt_token_ids + prefix_solution_tokens
-                else:
-                    # If prompt is already >= token_pos, just use prompt up to token_pos
-                    prefix_tokens = prompt_token_ids[:token_pos]
+                # Build full sequence: prompt + solution
+                full_tokens = prompt_token_ids + solution_tokens
                 
-                # Ensure we have exactly token_pos tokens (or less if not enough)
-                prefix_tokens = prefix_tokens[:token_pos]
+                # Extract at position token_pos (0-indexed, so token_pos-1 is the token at that position)
+                # But we need at least token_pos tokens total
+                if len(full_tokens) < token_pos:
+                    log.warning(f"Sample {i}: Only {len(full_tokens)} tokens, need {token_pos}. Using all tokens.")
+                    prefix_tokens = full_tokens
+                    extract_pos = len(full_tokens) - 1  # Last token
+        else:
+                    # Use exactly token_pos tokens (prompt + first part of solution)
+                    prefix_tokens = full_tokens[:token_pos]
+                    extract_pos = token_pos - 1  # Extract at the token_pos-th token (0-indexed)
                 
                 # Convert to tensor
                 prefix_tensor = torch.tensor([prefix_tokens], device=device)
                 
-                # Extract hidden state at token_pos-1 (0-indexed)
+                # Extract hidden state at the specified position
                 hidden_state = None
                 def hook_fn(module, input, output):
                     nonlocal hidden_state
                     hidden = output[0] if isinstance(output, tuple) else output
-                    # Extract at position token_pos-1 (last token of prefix)
-                    extract_pos = min(token_pos - 1, hidden.shape[1] - 1)
-                    hidden_state = hidden[0, extract_pos, :].detach()
+                    # Extract at the exact position we want
+                    actual_pos = min(extract_pos, hidden.shape[1] - 1)
+                    hidden_state = hidden[0, actual_pos, :].detach()
                     # Fix NaN/Inf immediately on GPU
                     if torch.any(torch.isnan(hidden_state)) or torch.any(torch.isinf(hidden_state)):
                         hidden_state = torch.nan_to_num(hidden_state, nan=0.0, posinf=0.0, neginf=0.0)
@@ -248,22 +249,23 @@ Solution:
                 
                 if hidden_state is not None:
                     # Move to CPU and convert to numpy
-                    h_np = hidden_state.cpu().numpy().astype(np.float32)  # Use float32 to prevent overflow
+                    h_np = hidden_state.cpu().numpy().astype(np.float32)
                     # Final safety check - only fix NaN/Inf, don't clamp (preserve variance)
                     if np.any(np.isnan(h_np)) or np.any(np.isinf(h_np)):
                         h_np = np.nan_to_num(h_np, nan=0.0, posinf=0.0, neginf=0.0)
-                    # Only clip extreme outliers (99.9th percentile) to prevent overflow, not all values
-                    p99 = np.percentile(np.abs(h_np), 99.9)
-                    if p99 > 1000:
-                        log.warning(f"Sample {i} has extreme values (p99={p99:.2f}), clipping outliers")
-                        h_np = np.clip(h_np, -p99, p99)
                     hidden_states.append(h_np)
+                    
+                    # Debug: log first few values to verify we're getting different states
+                    if i < 3:
+                        log.info(f"Sample {i}: Hidden state shape={h_np.shape}, mean={np.mean(h_np):.4f}, std={np.std(h_np):.4f}, first_5={h_np[:5]}")
                 else:
-                    log.warning(f"Sample {i} failed to extract hidden state")
+                    log.error(f"Sample {i} failed to extract hidden state")
                     hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
                     hidden_states.append(np.zeros(hidden_dim, dtype=np.float32))
             except Exception as e:
                 log.error(f"Error extracting hidden state for sample {i}: {e}")
+                import traceback
+                log.error(traceback.format_exc())
                 hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
                 hidden_states.append(np.zeros(hidden_dim, dtype=np.float32))
 
@@ -282,18 +284,24 @@ Solution:
     greedy_solution = greedy_text[len(prompt):]
     greedy_correct = grade_math(greedy_solution, problem['answer'])
 
-    # Extract greedy hidden state at token_pos (only first token_pos tokens)
-    # Use the same approach as for other solutions
+    # Extract greedy hidden state at token_pos - same logic as other solutions
     greedy_token_ids = tokenizer.encode(greedy_text, add_special_tokens=False)
-    greedy_prefix_ids = greedy_token_ids[:token_pos]
+    
+    if len(greedy_token_ids) < token_pos:
+        greedy_prefix_ids = greedy_token_ids
+        greedy_extract_pos = len(greedy_token_ids) - 1
+    else:
+        greedy_prefix_ids = greedy_token_ids[:token_pos]
+        greedy_extract_pos = token_pos - 1
+    
     greedy_prefix_tensor = torch.tensor([greedy_prefix_ids], device=device)
     
     greedy_hidden = None
     def greedy_hook_fn(module, input, output):
         nonlocal greedy_hidden
         hidden = output[0] if isinstance(output, tuple) else output
-        extract_pos = min(token_pos - 1, hidden.shape[1] - 1)
-        greedy_hidden = hidden[0, extract_pos, :].detach()
+        actual_pos = min(greedy_extract_pos, hidden.shape[1] - 1)
+        greedy_hidden = hidden[0, actual_pos, :].detach()
         # Fix NaN/Inf immediately
         if torch.any(torch.isnan(greedy_hidden)) or torch.any(torch.isinf(greedy_hidden)):
             greedy_hidden = torch.nan_to_num(greedy_hidden, nan=0.0, posinf=0.0, neginf=0.0)
@@ -335,12 +343,22 @@ Solution:
             log.info(f"Hidden states mean: {np.mean(hidden_states_f64):.4f}, std: {np.std(hidden_states_f64):.4f}")
             log.info(f"Hidden states min: {np.min(hidden_states_f64):.4f}, max: {np.max(hidden_states_f64):.4f}")
             
+            # Check if all hidden states are identical (would cause zero variance)
+            sample_diffs = []
+            for i in range(min(5, len(hidden_states_f64))):
+                for j in range(i+1, min(5, len(hidden_states_f64))):
+                    diff = np.mean(np.abs(hidden_states_f64[i] - hidden_states_f64[j]))
+                    sample_diffs.append(diff)
+            if sample_diffs:
+                log.info(f"Mean difference between first 5 samples: {np.mean(sample_diffs):.6f}")
+            
             # Remove features with zero variance (they don't contribute to PCA)
             feature_vars = np.var(hidden_states_f64, axis=0)
             valid_features = feature_vars > 1e-12  # Very lenient threshold
             
             n_valid = np.sum(valid_features)
             log.info(f"Features with variance: {n_valid}/{len(feature_vars)}")
+            log.info(f"Feature variance stats: min={np.min(feature_vars):.6e}, max={np.max(feature_vars):.6e}, mean={np.mean(feature_vars):.6e}")
             
             if n_valid < 2:
                 log.warning(f"Only {n_valid} features have variance. Using all features for PCA anyway.")
@@ -357,17 +375,21 @@ Solution:
             total_var = np.var(hidden_states_centered)
             log.info(f"Total variance after centering: {total_var:.6e}")
             
-            if total_var < 1e-15:
-                log.warning("Total variance is extremely small. Samples may be nearly identical.")
-                # Still try PCA - it might work
-                log.info("Attempting PCA anyway...")
-            
-            # Run PCA - always try, even with low variance
+            # Run PCA - MUST use actual data, never return zeros
             n_components = min(2, hidden_states_valid.shape[1])
+            log.info(f"Running PCA with {n_components} components on {hidden_states_valid.shape[0]} samples, {hidden_states_valid.shape[1]} features")
+            
             pca = PCA(n_components=n_components)
             hidden_2d = pca.fit_transform(hidden_states_centered)
             
             log.info(f"PCA explained variance ratio: {pca.explained_variance_ratio_}")
+            log.info(f"PCA output shape: {hidden_2d.shape}, mean: {np.mean(hidden_2d):.4f}, std: {np.std(hidden_2d):.4f}")
+            log.info(f"PCA output range: [{np.min(hidden_2d):.4f}, {np.max(hidden_2d):.4f}]")
+            
+            # Verify PCA actually produced non-zero values
+            if np.allclose(hidden_2d, 0):
+                log.error("PCA produced all zeros! This should not happen. Check hidden states.")
+                raise ValueError("PCA produced all zeros - hidden states may be identical")
             
             # Transform greedy hidden state
             greedy_hidden_np = greedy_hidden.numpy().astype(np.float64)
@@ -474,7 +496,7 @@ Solution:
             else:
                 results_to_save[k] = v
         
-        with open(output_dir / f"{model_name}_results.json", 'w') as f:
+    with open(output_dir / f"{model_name}_results.json", 'w') as f:
             json.dump(results_to_save, f, indent=2)
         log.info(f"Saved results to {output_dir / f'{model_name}_results.json'}")
     except Exception as e:
