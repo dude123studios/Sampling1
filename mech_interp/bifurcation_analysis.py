@@ -23,14 +23,13 @@ log = logging.getLogger(__name__)
 
 
 def load_sweep_problem(sweep_dir: Path, temperature: str, model_filter: str):
-    """Load a hard problem from sweep results."""
+    """Load specific problem ID 24 from sweep results."""
     log.info(f"Loading from {sweep_dir} (temp={temperature}, model={model_filter})")
 
     # Look for specific directory pattern
     pattern = f"*{model_filter}*temp{temperature}*"
     all_matching = list(sweep_dir.glob(pattern))
 
-    # Filter strictly - if qwen3-8b, exclude deepseek
     matching_dirs = []
     for d in all_matching:
         if model_filter == "qwen3-8b" and "deepseek" in d.name:
@@ -41,87 +40,77 @@ def load_sweep_problem(sweep_dir: Path, temperature: str, model_filter: str):
         log.error(f"No matching directories for pattern: {pattern}")
         return None
 
-    log.info(f"Found {len(matching_dirs)} matching directories")
+    target_id = 24
+    log.info(f"Searching for Problem ID {target_id} in {len(matching_dirs)} directories...")
 
     for run_dir in matching_dirs:
         log_file = run_dir / 'log.jsonl'
         if not log_file.exists():
-            log.warning(f"No log file in {run_dir.name}")
             continue
-
-        log.info(f"Searching in: {run_dir.name}")
-
-        problem_count = 0
-        level5_count = 0
-        found_count = 0  # Track how many suitable problems we've found
 
         with open(log_file) as f:
             for line in f:
-                if not line.strip():
-                    continue
+                if not line.strip(): continue
                 try:
                     entry = json.loads(line)
-                    if entry.get('type') == 'summary':
-                        continue
-
-                    problem_count += 1
-
-                    # Check for level 5 problem with exactly 1 correct (num_correct == 1)
-                    if 'outputs' in entry and 'metrics' in entry:
-                        level = entry.get('level')
-                        metrics = entry.get('metrics', {})
-                        num_correct = metrics.get('num_correct')
-
-                        if level == 5:
-                            level5_count += 1
-
-                        # Level 5 with exactly 1 correct
-                        if level == 5 and num_correct == 1:
-                            found_count += 1
-                            dataset_id = entry.get('dataset_id', '')
-
-                            # Skip first problem, use second one
-                            if found_count == 1:
-                                log.info(f"Skipping first problem: {dataset_id} (1 correct)")
-                                continue
-
-                            log.info(f"Found level 5 problem #{found_count}: {dataset_id} (num_correct=1)")
-
-                            # Load actual problem from dataset
-                            from datasets import load_dataset
+                    # Support string or int ID comparison
+                    current_id = entry.get('id')
+                    try:
+                        current_id = int(str(current_id))
+                    except:
+                        pass
+                        
+                    if current_id == target_id:
+                        log.info(f"Found Problem ID {target_id} in {run_dir.name}")
+                        
+                        dataset_id = entry.get('dataset_id')
+                        
+                        # Load from HuggingFace
+                        log.info("Loading MATH-500 dataset from HuggingFace...")
+                        from datasets import load_dataset
+                        try:
                             dataset = load_dataset("HuggingFaceH4/MATH-500", split="test")
+                        except Exception as e:
+                            log.error(f"Failed to load HF dataset: {e}")
+                            return None
 
-                            # Find the problem in dataset
-                            problem_text = None
+                        problem_text = None
+                        answer = None
+
+                        # Try to find by unique_id
+                        if dataset_id:
                             for item in dataset:
                                 if item.get('unique_id') == dataset_id:
                                     problem_text = item['problem']
+                                    answer = item['answer']
+                                    log.info(f"Matched dataset_id: {dataset_id}")
                                     break
+                        
+                        # Fallback: Use index 24 if id match failed or dataset_id missing
+                        if not problem_text:
+                            log.warning(f"Could not match dataset_id '{dataset_id}'. Using index {target_id} from dataset.")
+                            try:
+                                item = dataset[target_id]
+                                problem_text = item['problem']
+                                answer = item['answer']
+                            except Exception as e:
+                                log.error(f"Failed to load index {target_id}: {e}")
+                                return None
 
-                            if not problem_text:
-                                log.warning(f"Could not find problem text for {dataset_id} in dataset")
-                                continue
+                        return {
+                            'problem_id': dataset_id or f"id_{target_id}",
+                            'problem': problem_text,
+                            'answer': answer,
+                            'outputs': entry.get('outputs', []),
+                            'correctness': [bool(s) for s in entry.get('scores', [])] if 'scores' in entry else entry.get('correctness', []),
+                            'level': entry.get('level', 0)
+                        }
 
-                            log.info(f"Successfully loaded problem from dataset")
-                            return {
-                                'problem_id': dataset_id,
-                                'problem': problem_text,
-                                'answer': entry.get('gold', ''),
-                                'outputs': entry['outputs'],
-                                'correctness': [bool(s) for s in entry['scores']],
-                                'level': level
-                            }
                 except Exception as e:
-                    log.debug(f"Error parsing entry: {e}")
                     continue
 
-        log.info(f"Scanned {problem_count} problems, {level5_count} level 5, {found_count} with num_correct=1")
-
-    log.error("No suitable problem found")
-
-    log.error("No suitable problem found")
+    log.error(f"Problem ID {target_id} not found in any logs.")
     return None
-
 
 def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, layer_idx: int, device: str):
     """Extract hidden state at specific position and layer."""
@@ -129,15 +118,21 @@ def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, lay
     input_ids = inputs['input_ids']
 
     seq_len = input_ids.shape[1]
-    if seq_len < token_pos:
-        token_pos = seq_len - 1
+    # If generated text is shorter than target position, just take the last token
+    actual_pos = token_pos
+    if seq_len <= token_pos:
+        actual_pos = seq_len - 1
 
     hidden_state = None
 
     def hook_fn(module, input, output):
         nonlocal hidden_state
         hidden = output[0] if isinstance(output, tuple) else output
-        hidden_state = hidden[0, token_pos, :].detach().cpu()
+        # Handle batch dimension [0]
+        if hidden.shape[1] > actual_pos:
+             hidden_state = hidden[0, actual_pos, :].detach().cpu()
+        else:
+             hidden_state = hidden[0, -1, :].detach().cpu()
 
     hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
 
