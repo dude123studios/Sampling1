@@ -323,8 +323,10 @@ Solution:
     # Pre-tokenize prompt once
     prompt_token_ids = tokenizer.encode(prompt, add_special_tokens=False)
     prompt_len = len(prompt_token_ids)
-    
-    log.info(f"Prompt length: {prompt_len} tokens, extracting at position {token_pos} (after {token_pos} total tokens)")
+
+    # Extract at position: prompt_len + token_pos (token_pos tokens into the solution)
+    extraction_pos = prompt_len + token_pos
+    log.info(f"Prompt length: {prompt_len} tokens, extracting at position {extraction_pos} ({token_pos} tokens into solution)")
     
     # Extract hidden states at token_position (exactly after token_pos tokens)
     hidden_states = []
@@ -332,27 +334,27 @@ Solution:
     with torch.no_grad():
         for i, solution in enumerate(tqdm(outputs, desc="Extracting hidden states")):
             try:
-                # CRITICAL: Extract at exactly position token_pos (after token_pos tokens total)
-                # token_pos = 16 means we want the hidden state AFTER 16 tokens (prompt + solution)
+                # CRITICAL: Extract at position extraction_pos = prompt_len + token_pos
+                # token_pos tokens into the solution (after the prompt)
                 solution_tokens = tokenizer.encode(solution, add_special_tokens=False)
-                
+
                 # Build full sequence: prompt + solution
                 full_tokens = prompt_token_ids + solution_tokens
-                
-                # We need exactly token_pos tokens to extract at position token_pos-1 (0-indexed)
-                # Position token_pos-1 is the token_pos-th token (after token_pos tokens processed)
-                if len(full_tokens) < token_pos:
+
+                # We need at least extraction_pos tokens to extract at position extraction_pos-1 (0-indexed)
+                # Position extraction_pos-1 is extraction_pos tokens into the sequence
+                if len(full_tokens) < extraction_pos:
                     # Not enough tokens - use what we have
                     prefix_tokens = full_tokens
                     extract_pos = len(full_tokens) - 1  # Last available token
                     if i == 0:
-                        log.warning(f"Sample {i}: Only {len(full_tokens)} tokens, need {token_pos}. Using position {extract_pos}.")
+                        log.warning(f"Sample {i}: Only {len(full_tokens)} tokens, need {extraction_pos}. Using position {extract_pos}.")
                 else:
-                    # Use exactly token_pos tokens (prompt + solution tokens up to token_pos)
-                    prefix_tokens = full_tokens[:token_pos]
-                    extract_pos = token_pos - 1  # Extract at position token_pos-1 (the token_pos-th token, 0-indexed)
+                    # Use exactly extraction_pos tokens (prompt + solution tokens up to extraction_pos)
+                    prefix_tokens = full_tokens[:extraction_pos]
+                    extract_pos = extraction_pos - 1  # Extract at position extraction_pos-1 (the extraction_pos-th token, 0-indexed)
                     if i == 0:
-                        log.info(f"Extracting at position {extract_pos} (after {token_pos} tokens: {prompt_len} prompt + {token_pos - prompt_len} solution)")
+                        log.info(f"Extracting at position {extract_pos} (after {extraction_pos} tokens: {prompt_len} prompt + {token_pos} solution)")
                 
                 # Convert to tensor
                 prefix_tensor = torch.tensor([prefix_tokens], device=device)
@@ -410,18 +412,18 @@ Solution:
     greedy_solution = greedy_text[len(prompt):]
     greedy_correct = grade_math(greedy_solution, problem['answer'])
 
-    # Extract greedy hidden state at token_pos - same logic as other solutions
-    # Extract at exactly position token_pos (after token_pos tokens)
+    # Extract greedy hidden state at extraction_pos - same logic as other solutions
+    # Extract at position extraction_pos = prompt_len + token_pos (token_pos tokens into solution)
     greedy_token_ids = tokenizer.encode(greedy_text, add_special_tokens=False)
-    
-    if len(greedy_token_ids) < token_pos:
+
+    if len(greedy_token_ids) < extraction_pos:
         greedy_prefix_ids = greedy_token_ids
         greedy_extract_pos = len(greedy_token_ids) - 1
-        log.warning(f"Greedy: Only {len(greedy_token_ids)} tokens, need {token_pos}. Using position {greedy_extract_pos}.")
+        log.warning(f"Greedy: Only {len(greedy_token_ids)} tokens, need {extraction_pos}. Using position {greedy_extract_pos}.")
     else:
-        greedy_prefix_ids = greedy_token_ids[:token_pos]
-        greedy_extract_pos = token_pos - 1  # Extract at position token_pos-1 (the token_pos-th token)
-        log.info(f"Greedy: Extracting at position {greedy_extract_pos} (after {token_pos} tokens)")
+        greedy_prefix_ids = greedy_token_ids[:extraction_pos]
+        greedy_extract_pos = extraction_pos - 1  # Extract at position extraction_pos-1 (the extraction_pos-th token)
+        log.info(f"Greedy: Extracting at position {greedy_extract_pos} (after {extraction_pos} tokens)")
     
     greedy_prefix_tensor = torch.tensor([greedy_prefix_ids], device=device)
     
@@ -483,7 +485,7 @@ Solution:
                 log.info(f"Mean difference between first 5 samples: {mean_diff:.6f}")
                 if mean_diff < 1e-6:
                     log.error("CRITICAL: All hidden states are nearly identical! This means we're extracting from the same position (likely prompt).")
-                    log.error(f"Prompt length: {prompt_len}, token_pos: {token_pos}")
+                    log.error(f"Prompt length: {prompt_len}, token_pos: {token_pos}, extraction_pos: {extraction_pos}")
                     log.error("This will cause zero variance in PCA. Check extraction logic.")
                     raise ValueError("All hidden states are identical - extraction position is wrong")
             
