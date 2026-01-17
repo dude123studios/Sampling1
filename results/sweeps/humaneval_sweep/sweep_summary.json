@@ -1,53 +1,15 @@
 {
   "sweep_name": "humaneval_sweep",
   "description": "HumanEval code generation benchmark with pass@20 evaluation",
-  "total_runs": 2,
+  "total_runs": 1,
   "results": [
     {
       "run_name": "qwen3-8b_temp0.6_n25_humaneval_2026-01-16_22-19-33",
       "output_dir": "results/sweeps/humaneval_sweep/qwen3-8b_temp0.6_n25_humaneval_2026-01-16_22-19-33",
       "summary": {
-        "type": "summary",
-        "run_config": {
-          "model": {
-            "name": "qwen3-8b",
-            "model_name": "qwen/qwen3-8b",
-            "type": "api",
-            "provider": "openrouter"
-          },
-          "task": {
-            "name": "humaneval",
-            "dataset": "openai_humaneval",
-            "split": "test"
-          },
-          "method": {
-            "name": "baseline",
-            "max_new_tokens": 2048
-          },
-          "parameters": {
-            "temperature": 0.6,
-            "num_samples": 25,
-            "top_k": 50,
-            "top_p": 0.9,
-            "limit": 100
-          }
-        },
-        "timestamp": "2026-01-17T00:01:44.282246",
-        "total_problems": 100,
-        "total_samples": 500,
-        "total_correct": 317,
-        "pass@1": 0.634,
-        "pass@5": 0.94,
-        "pass@10": 0.0,
-        "pass@20": 0.0,
-        "overall_accuracy": 0.634
+        "status": "skipped_already_done"
       }
-    },
-    {
-      "run_name": "deepseek-qwen3-8b_temp0.6_n25_humaneval_2026-01-17_00-01-44",
-      "output_dir": "results/sweeps/humaneval_sweep/deepseek-qwen3-8b_temp0.6_n25_humaneval_2026-01-17_00-01-44",
-      "summary": null
     }
   ],
-  "timestamp": "2026-01-17T00:02:08.455437"
+  "timestamp": "2026-01-17T15:17:11.731372"
 }

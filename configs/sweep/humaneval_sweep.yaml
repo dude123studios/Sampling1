@@ -11,10 +11,6 @@ models:
     type: "api"
     provider: "openrouter"
 
-  - name: "deepseek-qwen3-8b"
-    model_name: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B"
-    type: "api"
-    provider: "openrouter"
 
 parameters:
   temperature: [0.6]

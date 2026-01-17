@@ -98,3 +98,52 @@ class APIModel(BaseModel):
                     time.sleep(2 ** i)
                     
         raise last_error or Exception("Unknown API error")
+
+    def embed(self, text: str, timeout: int = 30):
+        """Get embeddings for text using OpenRouter embeddings API."""
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "HTTP-Referer": "https://neurips-experiment.com",
+            "X-Title": "Sampling Limits NeurIPS",
+            "Content-Type": "application/json"
+        }
+
+        data = {
+            "model": self.model_name,
+            "input": text
+        }
+
+        retries = 3
+        last_error = None
+
+        current_timeout = timeout
+
+        for i in range(retries):
+            try:
+                response = requests.post(
+                    f"{self.base_url}/embeddings",
+                    headers=headers,
+                    json=data,
+                    timeout=current_timeout
+                )
+
+                if response.status_code != 200:
+                    print(f"Embedding API Error (Attempt {i+1}): {response.status_code} - {response.text}")
+                    response.raise_for_status()
+
+                resp_json = response.json()
+                if 'data' not in resp_json or not resp_json['data']:
+                    print(f"Embedding API Error (Unexpected Format): {resp_json}")
+                    raise KeyError("'data' not found in response")
+
+                # Return the embedding vector
+                embedding = resp_json['data'][0]['embedding']
+                return embedding
+
+            except Exception as e:
+                print(f"Embedding request failed (Attempt {i+1}): {e}")
+                last_error = e
+                if i < retries - 1:
+                    time.sleep(2 ** i)
+
+        raise last_error or Exception("Unknown embedding API error")

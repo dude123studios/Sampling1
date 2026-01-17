@@ -7,14 +7,10 @@ models:
   name: qwen3-8b
   provider: openrouter
   type: api
-- model_name: deepseek-ai/DeepSeek-R1-0528-Qwen3-8B
-  name: deepseek-qwen3-8b
-  provider: openrouter
-  type: api
 name: humaneval_sweep
 parameters:
   limit:
-  - 100
+  - null
   num_samples:
   - 25
   temperature:

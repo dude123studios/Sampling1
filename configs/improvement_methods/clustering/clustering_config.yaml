@@ -1,33 +1,24 @@
-# Configuration for Clustering Experiment
-# This experiment generates k prefixes of length l, extracts layer activations,
+# Configuration for API-Based Clustering Experiment
+# This experiment generates k prefixes via API, embeds them using qwen3-embedding-8b,
 # clusters them using HDBSCAN, and continues generation from cluster representatives
-
-# Source experiment results - not used, we load directly from dataset
-# source_results: null
 
 # No filter criteria - we use all level 5 problems
 # filter_criteria:
 #   min_correct: 1
 #   max_correct: 2
 
-# Model configuration (local HuggingFace model)
-model:
-  name: "qwen3-8b"
-  model_id: "Qwen/Qwen3-8B"
-  type: "local"
-  device: "cuda"
-  dtype: "float16"
-
 # Experiment parameters
-extraction_layer: 20  # Layer number to extract activations from (configurable, default: 20)
-extraction_position: 16  # Position to extract activations at (relative to prompt end, e.g., prompt_len + 16)
 k_values: [32]  # Number of prefixes to generate (sweep across these values)
-l_values: [16, 32, 64]  # Prefix lengths in tokens (sweep across these values)
+l_values: [16]  # Prefix lengths in tokens (sweep across these values)
 
 # Generation parameters
 temperature: 0.6
 max_new_tokens: 4096
 top_p: 1.0
+
+# Threading parameters (optimized for speed and stability)
+# max_problem_workers: 20  # Problems processed in parallel (command line arg)
+# max_api_workers_per_problem: 5  # API calls per problem (hardcoded in script)
 
 # HDBSCAN clustering parameters
 hdbscan:
@@ -44,8 +35,10 @@ task:
 # Output directory
 output_dir: "results/improvement_methods/clustering"
 
-# API configuration for continuation generation (OpenRouter)
+# API configuration for generation and embedding (OpenRouter)
 api:
-  model_name: "qwen/qwen3-8b"  # Model to use for continuation generation
+  generation_model: "qwen/qwen3-8b"  # Model to use for prefix generation and continuation
+  embedding_model: "qwen/qwen3-embedding-8b"  # Model to use for embedding generated text
   base_url: "https://openrouter.ai/api/v1"
-  api_key: "your-openrouter-api-key-here"  # Replace with your actual API key
+  # API key will be read from OPENROUTER_API_KEY environment variable (.env file)
+  # If not found, uncomment and set here: api_key: "your-openrouter-api-key-here"

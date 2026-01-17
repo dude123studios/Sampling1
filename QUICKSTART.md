@@ -1,5 +1,19 @@
 # Quick Start Guide
 
+## 🔑 API Key Setup
+
+Most experiments use OpenRouter API. Set up your API key:
+
+```bash
+# Create .env file in project root
+echo "OPENROUTER_API_KEY=sk-or-v1-your-api-key-here" > .env
+
+# Make sure .env is in .gitignore (it should be already)
+# The .env file contains your API keys and should never be committed to git
+```
+
+The experiments will automatically load API keys from the `.env` file.
+
 ## 🚀 HumanEval Code Generation
 
 ### Run Tests

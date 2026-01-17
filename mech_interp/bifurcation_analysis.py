@@ -51,22 +51,22 @@ def load_problem_directly(problem_id: int = 24):
 def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, layer_idx: int, device: str):
     """Extract hidden state at specific position and layer. Keep on GPU for efficiency."""
     try:
-        inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
-        input_ids = inputs['input_ids']
+    inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
+    input_ids = inputs['input_ids']
 
-        seq_len = input_ids.shape[1]
+    seq_len = input_ids.shape[1]
         actual_pos = min(token_pos, seq_len - 1)  # Ensure valid position
 
-        hidden_state = None
+    hidden_state = None
 
-        def hook_fn(module, input, output):
-            nonlocal hidden_state
+    def hook_fn(module, input, output):
+        nonlocal hidden_state
             try:
-                hidden = output[0] if isinstance(output, tuple) else output
+        hidden = output[0] if isinstance(output, tuple) else output
                 # Extract on GPU, only move to CPU at the end
-                if hidden.shape[1] > actual_pos:
+        if hidden.shape[1] > actual_pos:
                     hidden_state = hidden[0, actual_pos, :].detach()  # Keep on GPU
-                else:
+        else:
                     hidden_state = hidden[0, -1, :].detach()  # Keep on GPU
                 
                 # Check for NaN/Inf and fix immediately (prevent propagation)
@@ -80,12 +80,12 @@ def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, lay
                 log.error(f"Error in hook: {e}")
                 hidden_state = None
 
-        hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
+    hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
 
-        with torch.no_grad():
-            _ = model(input_ids)
+    with torch.no_grad():
+        _ = model(input_ids)
 
-        hook.remove()
+    hook.remove()
         
         if hidden_state is None:
             log.error(f"Failed to extract hidden state, returning zeros")
@@ -178,8 +178,15 @@ Solution:
             outputs = []
     
     # Generate samples if none exist - use OpenRouter API with multithreading
-    if not outputs:
-        n_samples = cfg['analysis'].get('n_samples', 20)
+    n_samples = cfg['analysis'].get('n_samples', 100)  # Default to 100
+    if not outputs or len(outputs) < n_samples:
+        if outputs:
+            log.info(f"Loaded {len(outputs)} solutions but need {n_samples}, generating additional ones")
+            # Pad existing outputs to n_samples
+            while len(outputs) < n_samples:
+                outputs.append("")
+        else:
+            n_samples = cfg['analysis'].get('n_samples', 100)
         log.info(f"Generating {n_samples} samples for Problem {problem_id} using OpenRouter API (temp={temp}, max_tokens={max_new_tokens})...")
         
         # Initialize API model for generation
@@ -270,30 +277,52 @@ Solution:
                 log.error(f"Error generating solution {idx}: {e}")
                 return idx, None, str(e)
         
-        generated_solutions = [None] * n_samples
+        generated_solutions = [None] * samples_to_generate
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(generate_one_solution, i): i for i in range(n_samples)}
-            for future in tqdm(as_completed(futures), total=n_samples, desc="Generating"):
+            futures = {executor.submit(generate_one_solution, i): i for i in range(samples_to_generate)}
+            for future in tqdm(as_completed(futures), total=samples_to_generate, desc="Generating"):
                 idx, sol, error = future.result()
                 if error:
                     log.warning(f"Solution {idx} failed: {error}")
                     generated_solutions[idx] = ""  # Empty string on error
                 else:
                     generated_solutions[idx] = sol
+
+        # Append new solutions to existing ones (or replace if none existed)
+        if outputs:
+            outputs.extend(generated_solutions)  # Add to existing
+        else:
+            outputs = generated_solutions  # Replace with new
+
+        # Ensure we have exactly n_samples
+        if len(outputs) > n_samples:
+            outputs = outputs[:n_samples]
+        elif len(outputs) < n_samples:
+            while len(outputs) < n_samples:
+                outputs.append("")
         
-        outputs = [s for s in generated_solutions if s]  # Filter out None/empty
+        # Verify diversity (including failed generations)
+        valid_outputs = [s for s in outputs if s and s.strip()]
+        unique_solutions = set(valid_outputs)
+        log.info(f"Generated {len(outputs)} samples total, {len(valid_outputs)} valid, {len(unique_solutions)} unique.")
         
-        # Verify diversity
-        unique_solutions = set(outputs)
-        log.info(f"Generated {len(outputs)} samples, {len(unique_solutions)} unique.")
-        
-        # Grade them
+        # Grade them (all 100 results)
         log.info("Grading generated solutions...")
-        for sol in outputs:
+        labels = []
+        for i, sol in enumerate(outputs):
+            if sol and sol.strip():  # Only grade non-empty solutions
             is_correct = grade_math(sol, problem['answer'])
             labels.append(1 if is_correct else 0)
+            else:
+                # Failed generation or empty response
+                labels.append(0)  # Count as incorrect
+                if i < 5:  # Log first few failures
+                    log.warning(f"Solution {i} was empty/failed, counting as incorrect")
         
         # Save solutions for future use
+        log.info(f"About to save: outputs has {len(outputs)} items, labels has {len(labels)} items")
+        log.info(f"First 5 outputs: {[repr(s[:50]) for s in outputs[:5]]}")
+        log.info(f"First 5 labels: {labels[:5]}")
         log.info(f"Saving {len(outputs)} solutions to {solutions_file}")
         try:
             with open(solutions_file, 'w') as f:
@@ -302,6 +331,8 @@ Solution:
                     'model_name': model_name,
                     'temperature': temp,
                     'n_samples': len(outputs),
+                    'valid_samples': len(valid_outputs),
+                    'unique_samples': len(unique_solutions),
                     'solutions': outputs,
                     'labels': labels
                 }, f, indent=2)
@@ -312,9 +343,13 @@ Solution:
     else:
         # Should not happen with new logic, but kept for safety
         if len(labels) == 0:
-            labels = [1 if c else 0 for c in problem['correctness']]
+        labels = [1 if c else 0 for c in problem['correctness']]
 
-    log.info(f"Solutions: {len(outputs)}, Success rate: {sum(labels)/len(labels):.2%}")
+    correct_count = sum(labels)
+    total_count = len(labels)
+    success_rate = correct_count / total_count if total_count > 0 else 0
+    log.info(f"Solutions: {total_count}, Correct: {correct_count}, Success rate: {success_rate:.2%}")
+    log.info(f"First 10 labels: {labels[:10]}")  # Debug: show first 10 results
 
     log.info(f"Extracting hidden states from {len(outputs)} solutions using local HuggingFace model...")
     token_pos = cfg['analysis']['token_position']
@@ -333,23 +368,28 @@ Solution:
     
     with torch.no_grad():
         for i, solution in enumerate(tqdm(outputs, desc="Extracting hidden states")):
+            extraction_count += 1
             try:
                 # CRITICAL: Extract at position extraction_pos = prompt_len + token_pos
                 # token_pos tokens into the solution (after the prompt)
-                solution_tokens = tokenizer.encode(solution, add_special_tokens=False)
-
-                # Build full sequence: prompt + solution
-                full_tokens = prompt_token_ids + solution_tokens
+                if not solution or not solution.strip():
+                    # Empty solution - use just prompt tokens
+                    full_tokens = prompt_token_ids
+                    if i < 5:  # Log first few
+                        log.warning(f"Sample {i}: Empty solution, using only prompt tokens ({len(full_tokens)})")
+                else:
+                    solution_tokens = tokenizer.encode(solution, add_special_tokens=False)
+                    full_tokens = prompt_token_ids + solution_tokens
 
                 # We need at least extraction_pos tokens to extract at position extraction_pos-1 (0-indexed)
                 # Position extraction_pos-1 is extraction_pos tokens into the sequence
                 if len(full_tokens) < extraction_pos:
                     # Not enough tokens - use what we have
                     prefix_tokens = full_tokens
-                    extract_pos = len(full_tokens) - 1  # Last available token
+                    extract_pos = max(0, len(full_tokens) - 1)  # Last available token (at least 0)
                     if i == 0:
                         log.warning(f"Sample {i}: Only {len(full_tokens)} tokens, need {extraction_pos}. Using position {extract_pos}.")
-                else:
+        else:
                     # Use exactly extraction_pos tokens (prompt + solution tokens up to extraction_pos)
                     prefix_tokens = full_tokens[:extraction_pos]
                     extract_pos = extraction_pos - 1  # Extract at position extraction_pos-1 (the extraction_pos-th token, 0-indexed)
@@ -382,7 +422,7 @@ Solution:
                     if np.any(np.isnan(h_np)) or np.any(np.isinf(h_np)):
                         h_np = np.nan_to_num(h_np, nan=0.0, posinf=0.0, neginf=0.0)
                     hidden_states.append(h_np)
-                    
+
                     # Debug: log first few values to verify we're getting different states
                     if i < 3:
                         log.info(f"Sample {i}: Hidden state shape={h_np.shape}, mean={np.mean(h_np):.4f}, std={np.std(h_np):.4f}, first_5={h_np[:5]}")
@@ -390,12 +430,24 @@ Solution:
                     log.error(f"Sample {i} failed to extract hidden state")
                     hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
                     hidden_states.append(np.zeros(hidden_dim, dtype=np.float32))
+                    log.warning(f"Sample {i}: Using zeros for hidden state due to extraction failure")
+                    log.warning(f"Sample {i}: Using zeros for hidden state due to extraction failure")
             except Exception as e:
                 log.error(f"Error extracting hidden state for sample {i}: {e}")
                 import traceback
                 log.error(traceback.format_exc())
                 hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
                 hidden_states.append(np.zeros(hidden_dim, dtype=np.float32))
+                log.warning(f"Sample {i}: Using zeros for hidden state due to exception")
+
+    log.info(f"Extraction completed: processed {len(hidden_states)}/{len(outputs)} solutions, got {len(hidden_states)} hidden states")
+    if len(hidden_states) != len(outputs):
+        log.error(f"MISMATCH: Expected {len(outputs)} hidden states but got {len(hidden_states)}!")
+        # Pad with zeros if needed
+        while len(hidden_states) < len(outputs):
+            hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
+            hidden_states.append(np.zeros(hidden_dim, dtype=np.float32))
+            log.warning(f"Padded hidden states to reach {len(hidden_states)} items")
 
     # Greedy solution (temperature=0, deterministic)
     log.info("Generating greedy solution...")
@@ -453,9 +505,12 @@ Solution:
     hidden_states = np.array(hidden_states, dtype=np.float32)
     labels = np.array(labels, dtype=np.int32)  # Explicitly set dtype to int32
 
+    log.info(f"Hidden states array shape: {hidden_states.shape}")
+    log.info(f"Labels array shape: {labels.shape}")
     log.info(f"Success: {labels.sum()}/{len(labels)}, Greedy: {'CORRECT' if greedy_correct else 'INCORRECT'}")
 
     # PCA - use actual data, don't return zeros
+    log.info(f"Starting PCA with {len(hidden_states)} hidden states")
     if len(hidden_states) < 2:
         log.error(f"Not enough samples for PCA (need at least 2, got {len(hidden_states)})")
         hidden_2d = np.zeros((len(hidden_states), 2), dtype=np.float64)
@@ -497,13 +552,17 @@ Solution:
             n_valid = np.sum(valid_features)
             log.info(f"Features with variance: {n_valid}/{len(feature_vars)}")
             log.info(f"Feature variance stats: min={np.min(feature_vars):.6e}, max={np.max(feature_vars):.6e}, mean={np.mean(feature_vars):.6e}")
-            
+
             if n_valid < 2:
                 log.warning(f"Only {n_valid} features have variance. Using all features for PCA anyway.")
                 hidden_states_valid = hidden_states_f64
+                valid_feature_mask = np.ones(hidden_states_f64.shape[1], dtype=bool)
             else:
                 # Use only valid features
                 hidden_states_valid = hidden_states_f64[:, valid_features]
+                valid_feature_mask = valid_features
+
+            log.info(f"PCA input shape: {hidden_states_valid.shape} (samples x features)")
             
             # Center the data (required for PCA)
             hidden_states_mean = np.mean(hidden_states_valid, axis=0)
@@ -532,12 +591,8 @@ Solution:
             # Transform greedy hidden state
             greedy_hidden_np = greedy_hidden.numpy().astype(np.float64)
             greedy_hidden_np = np.nan_to_num(greedy_hidden_np, nan=0.0, posinf=0.0, neginf=0.0)
-            
-            if n_valid < 2:
-                greedy_hidden_valid = greedy_hidden_np.reshape(1, -1)
-            else:
-                greedy_hidden_valid = greedy_hidden_np[valid_features].reshape(1, -1)
-            
+
+            greedy_hidden_valid = greedy_hidden_np[valid_feature_mask].reshape(1, -1)
             greedy_centered = greedy_hidden_valid - hidden_states_mean
             greedy_2d = pca.transform(greedy_centered)[0]
             
@@ -625,7 +680,7 @@ Solution:
             else:
                 results_to_save[k] = v
         
-        with open(output_dir / f"{model_name}_results.json", 'w') as f:
+    with open(output_dir / f"{model_name}_results.json", 'w') as f:
             json.dump(results_to_save, f, indent=2)
         log.info(f"Saved results to {output_dir / f'{model_name}_results.json'}")
     except Exception as e:
@@ -646,41 +701,64 @@ Solution:
         except:
             pass
 
-    # Plot
-    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    # Plot - make it more dense and visually appealing
+    log.info(f"Creating plot with {len(hidden_2d)} points, {sum(labels)} correct, {len(labels) - sum(labels)} incorrect")
+    fig, ax = plt.subplots(1, 1, figsize=(12, 10))
 
     success_mask = labels == 1
     fail_mask = labels == 0
 
+    # Use smaller, more transparent points for density
     ax.scatter(hidden_2d[fail_mask, 0], hidden_2d[fail_mask, 1],
-               c='#E63946', s=80, alpha=0.6, edgecolors='black', linewidths=1.2,
+               c='#DC143C', s=50, alpha=0.7, edgecolors='white', linewidths=0.5,
                label=f'Failed ({results["n_fail"]})', zorder=2)
 
     ax.scatter(hidden_2d[success_mask, 0], hidden_2d[success_mask, 1],
-               c='#457B9D', s=80, alpha=0.6, edgecolors='black', linewidths=1.2,
+               c='#4169E1', s=50, alpha=0.7, edgecolors='white', linewidths=0.5,
                label=f'Success ({results["n_success"]})', zorder=3)
 
-    greedy_color = '#2A9D8F' if greedy_correct else '#F4A261'
+    greedy_color = '#32CD32' if greedy_correct else '#FF6347'
     greedy_label = 'Greedy (Correct)' if greedy_correct else 'Greedy (Incorrect)'
 
     ax.scatter(greedy_2d[0], greedy_2d[1],
-               c=greedy_color, s=400, alpha=1.0, marker='*',
-               edgecolors='black', linewidths=2.0, label=greedy_label, zorder=4)
+               c=greedy_color, s=300, alpha=1.0, marker='*',
+               edgecolors='white', linewidths=2.0, label=greedy_label, zorder=4)
 
-    ax.set_xlabel(f'PC1 ({results["explained_variance"][0]:.1%} var)', fontsize=13, fontweight='bold')
-    ax.set_ylabel(f'PC2 ({results["explained_variance"][1]:.1%} var)', fontsize=13, fontweight='bold')
-    ax.set_title(f'Trajectory Bifurcation: {model_name}\nLayer {layer_idx}, Token {token_pos}',
-                 fontsize=14, fontweight='bold', pad=15)
+    ax.set_xlabel(f'PC1 ({results["explained_variance"][0]:.1%} variance)', fontsize=14, fontweight='bold')
+    ax.set_ylabel(f'PC2 ({results["explained_variance"][1]:.1%} variance)', fontsize=14, fontweight='bold')
 
-    ax.grid(True, linestyle='--', alpha=0.3, zorder=0)
+    # Calculate nice axis limits to make it less spread out
+    x_range = hidden_2d[:, 0].max() - hidden_2d[:, 0].min()
+    y_range = hidden_2d[:, 1].max() - hidden_2d[:, 1].min()
+    x_center = (hidden_2d[:, 0].max() + hidden_2d[:, 0].min()) / 2
+    y_center = (hidden_2d[:, 1].max() + hidden_2d[:, 1].min()) / 2
+
+    # Add 20% padding
+    padding = 0.2
+    ax.set_xlim(x_center - x_range/2 * (1 + padding), x_center + x_range/2 * (1 + padding))
+    ax.set_ylim(y_center - y_range/2 * (1 + padding), y_center + y_range/2 * (1 + padding))
+
+    ax.set_title(f'Trajectory Bifurcation Analysis\n{model_name} • Layer {layer_idx} • Position {extraction_pos}',
+                 fontsize=16, fontweight='bold', pad=20)
+
+    # Lighter grid
+    ax.grid(True, linestyle='--', alpha=0.2, zorder=0)
     ax.set_axisbelow(True)
+
+    # Remove top and right spines for cleaner look
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.legend(loc='best', frameon=True, fontsize=11, edgecolor='black')
+    ax.spines['left'].set_linewidth(0.5)
+    ax.spines['bottom'].set_linewidth(0.5)
+
+    # Better legend
+    legend = ax.legend(loc='upper right', frameon=True, fontsize=12,
+                      framealpha=0.9, edgecolor='gray', fancybox=True)
+    legend.get_frame().set_linewidth(0.5)
 
     plt.tight_layout()
     plt.savefig(output_dir / f"{model_name}_bifurcation.png", dpi=300, bbox_inches='tight', facecolor='white')
-    log.info(f"Saved to {output_dir}")
+    log.info(f"Saved plot to {output_dir / f'{model_name}_bifurcation.png'}")
 
     return results
 
