@@ -22,19 +22,33 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 
-def load_sweep_problem(sweep_dir: Path, temperature: str, model_filter: str, min_samples: int = 5, target_pass_rate: tuple = (0.15, 0.25)):
+def load_sweep_problem(sweep_dir: Path, temperature: str, model_filter: str):
     """Load a hard problem from sweep results."""
     log.info(f"Loading from {sweep_dir} (temp={temperature}, model={model_filter})")
 
-    for run_dir in sweep_dir.iterdir():
-        if not run_dir.is_dir() or f"temp{temperature}" not in run_dir.name:
-            continue
-        if model_filter and model_filter not in run_dir.name:
-            continue
+    # Look for specific directory pattern
+    pattern = f"*{model_filter}*temp{temperature}*"
+    all_matching = list(sweep_dir.glob(pattern))
 
+    # Filter strictly - if qwen3-8b, exclude deepseek
+    matching_dirs = []
+    for d in all_matching:
+        if model_filter == "qwen3-8b" and "deepseek" in d.name:
+            continue
+        matching_dirs.append(d)
+
+    if not matching_dirs:
+        log.error(f"No matching directories for pattern: {pattern}")
+        return None
+
+    log.info(f"Found {len(matching_dirs)} matching directories")
+
+    for run_dir in matching_dirs:
         log_file = run_dir / 'log.jsonl'
         if not log_file.exists():
             continue
+
+        log.info(f"Searching in: {run_dir.name}")
 
         with open(log_file) as f:
             for line in f:
@@ -45,26 +59,43 @@ def load_sweep_problem(sweep_dir: Path, temperature: str, model_filter: str, min
                     if entry.get('type') == 'summary':
                         continue
 
-                    # Check if hard problem
-                    if 'outputs' in entry and 'correctness' in entry:
-                        n = len(entry['outputs'])
-                        if n < min_samples:
-                            continue
-                        c = sum(entry['correctness'])
-                        pass_rate = c / n
+                    # Check for problem with exactly 1/5 correct (20% pass rate)
+                    if 'outputs' in entry and 'scores' in entry:
+                        scores = entry['scores']
+                        n = len(scores)
+                        c = sum(scores)
 
-                        if target_pass_rate[0] <= pass_rate <= target_pass_rate[1]:
-                            log.info(f"Found hard problem: {entry.get('dataset_id')} (pass rate: {pass_rate:.2f})")
+                        if c == 1 and n == 5:  # Exactly 1 correct out of 5
+                            dataset_id = entry.get('dataset_id', '')
+                            log.info(f"Found hard problem: {dataset_id} (1/5 correct)")
+
+                            # Load actual problem from dataset
+                            from datasets import load_dataset
+                            dataset = load_dataset("HuggingFaceH4/MATH-500", split="test")
+
+                            # Find the problem in dataset
+                            problem_text = None
+                            for item in dataset:
+                                if item.get('unique_id') == dataset_id:
+                                    problem_text = item['problem']
+                                    break
+
+                            if not problem_text:
+                                log.warning(f"Could not find problem text for {dataset_id}")
+                                continue
+
                             return {
-                                'problem_id': entry.get('dataset_id'),
-                                'problem': entry.get('original_prompt', ''),
+                                'problem_id': dataset_id,
+                                'problem': problem_text,
                                 'answer': entry.get('gold', ''),
                                 'outputs': entry['outputs'],
-                                'correctness': entry['correctness'],
+                                'correctness': [bool(s) for s in scores],
                                 'level': entry.get('level', 5)
                             }
-                except:
+                except Exception as e:
                     continue
+
+    log.error("No suitable problem found")
     return None
 
 
@@ -117,9 +148,7 @@ def run_bifurcation_analysis(config_path: str):
     problem = load_sweep_problem(
         sweep_dir,
         cfg['data_source']['temperature'],
-        cfg['data_source']['model_filter'],
-        cfg['data_source']['min_samples'],
-        tuple(cfg['data_source']['target_pass_rate'])
+        cfg['data_source']['model_filter']
     )
 
     if not problem:

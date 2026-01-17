@@ -22,18 +22,20 @@ Edit `configs/mech_interp/bifurcation_config.yaml`:
 
 ```yaml
 model:
-  model_id: "Qwen/Qwen2.5-Math-7B-Instruct"
+  model_id: "Qwen/Qwen3-8B"
   device: "cuda"
 
 data_source:
   sweep_dir: "results/sweeps/temperature_sweep"
   temperature: "0.6"  # Which temp to analyze
-  target_pass_rate: [0.15, 0.25]  # Hard problem range
+  model_filter: "qwen3-8b"  # Model to analyze
 
 analysis:
   token_position: 16  # Extract state at token 16
   layer_idx: 10  # Extract from layer 10
 ```
+
+**Note**: Uses existing sweep data with 5 samples (finds problems with exactly 1/5 correct)
 
 ## Output
 
