@@ -45,16 +45,13 @@ def load_problem_directly(problem_id: int = 24):
     }
 
 def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, layer_idx: int, device: str):
-    """Extract hidden state at specific position and layer."""
+    """Extract hidden state at specific position and layer. Keep on GPU for efficiency."""
     try:
         inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
         input_ids = inputs['input_ids']
 
         seq_len = input_ids.shape[1]
-        # If generated text is shorter than target position, just take the last token
-        actual_pos = token_pos
-        if seq_len <= token_pos:
-            actual_pos = seq_len - 1
+        actual_pos = min(token_pos, seq_len - 1)  # Ensure valid position
 
         hidden_state = None
 
@@ -62,16 +59,18 @@ def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, lay
             nonlocal hidden_state
             try:
                 hidden = output[0] if isinstance(output, tuple) else output
-                # Handle batch dimension [0]
+                # Extract on GPU, only move to CPU at the end
                 if hidden.shape[1] > actual_pos:
-                     hidden_state = hidden[0, actual_pos, :].detach().cpu()
+                     hidden_state = hidden[0, actual_pos, :].detach()  # Keep on GPU
                 else:
-                     hidden_state = hidden[0, -1, :].detach().cpu()
+                     hidden_state = hidden[0, -1, :].detach()  # Keep on GPU
                 
-                # Check for NaN/Inf and replace
+                # Check for NaN/Inf and fix immediately (prevent propagation)
                 if hidden_state is not None:
-                    if torch.any(torch.isnan(hidden_state)) or torch.any(torch.isinf(hidden_state)):
-                        log.warning(f"NaN/Inf detected in hidden state, replacing with zeros")
+                    nan_count = torch.sum(torch.isnan(hidden_state)).item()
+                    inf_count = torch.sum(torch.isinf(hidden_state)).item()
+                    if nan_count > 0 or inf_count > 0:
+                        # Replace NaN/Inf with zeros on GPU
                         hidden_state = torch.nan_to_num(hidden_state, nan=0.0, posinf=0.0, neginf=0.0)
             except Exception as e:
                 log.error(f"Error in hook: {e}")
@@ -86,14 +85,13 @@ def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, lay
         
         if hidden_state is None:
             log.error(f"Failed to extract hidden state, returning zeros")
-            # Return zeros with correct shape
             hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
-            return torch.zeros(hidden_dim)
+            return torch.zeros(hidden_dim, device=device)  # Keep on GPU
         
-        return hidden_state
+        # Move to CPU only at the very end
+        return hidden_state.cpu()
     except Exception as e:
         log.error(f"Error extracting hidden state: {e}")
-        # Return zeros with correct shape
         hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
         return torch.zeros(hidden_dim)
 
@@ -141,87 +139,32 @@ Solution:
     max_new_tokens = cfg['analysis'].get('max_new_tokens', 4096)
     temp = cfg['analysis'].get('temperature', 0.6)  # Get temperature for results
     
-    # Generate samples if none exist
+    # Generate samples if none exist - use HuggingFace generate() (it works fine!)
     if not outputs:
         n_samples = cfg['analysis'].get('n_samples', 20)
         log.info(f"Generating {n_samples} samples for Problem {problem_id} (temp={temp}, max_tokens={max_new_tokens})...")
-        log.info(f"Temperature sampling enabled: do_sample=True, temperature={temp}")
         
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
         
+        # Use HuggingFace generate - it handles temperature/top_p correctly
+        # The warnings are just warnings, the parameters DO work
         generated_solutions = []
-        
-        # Generate samples one at a time using manual token-by-token generation
-        # This ensures temperature is properly applied and avoids generation config warnings
-        prompt_ids = inputs['input_ids']
-        
-        for _ in tqdm(range(n_samples), desc="Generating"):
-            current_ids = prompt_ids.clone()
-            generated_tokens = []
-            
-            # Manual generation with temperature and top_p
-            # This ensures temperature/top_p are properly applied (no warnings)
-            for _ in range(max_new_tokens):
-                with torch.no_grad():
-                    outputs = model(current_ids)
-                    logits = outputs.logits[:, -1, :]  # [1, vocab_size]
-                    
-                    # Handle greedy decoding (temperature = 0)
-                    if temp == 0:
-                        next_token = torch.argmax(logits, dim=-1, keepdim=True)
-                        token_id = next_token.item()
-                        generated_tokens.append(token_id)
-                        current_ids = torch.cat([current_ids, next_token], dim=1)
-                        if token_id == tokenizer.eos_token_id:
-                            break
-                        continue
-                    
-                    # Apply temperature
-                    logits = logits / temp
-                    
-                    # Apply top_k filtering (keep only top k tokens)
-                    top_k_value = 50  # Standard value
-                    if top_k_value > 0 and top_k_value < logits.shape[-1]:
-                        top_k_logits, top_k_indices = torch.topk(logits, top_k_value, dim=-1)
-                        # Create mask to zero out non-top-k tokens
-                        top_k_mask = torch.zeros_like(logits, dtype=torch.bool)
-                        top_k_mask.scatter_(-1, top_k_indices, True)
-                        logits = logits.masked_fill(~top_k_mask, float('-inf'))
-                    
-                    # Apply top_p (nucleus) filtering - 0.9 as used in clustering
-                    top_p_value = 0.9
-                    if top_p_value < 1.0:
-                        # Sort logits in descending order
-                        sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-                        # Convert to probabilities
-                        sorted_probs = torch.softmax(sorted_logits, dim=-1)
-                        # Calculate cumulative probabilities
-                        cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
-                        
-                        # Find tokens to remove (cumulative prob > top_p)
-                        sorted_indices_to_remove = cumulative_probs > top_p_value
-                        # Always keep at least one token
-                        sorted_indices_to_remove[..., 0] = False
-                        
-                        # Create mask for original logits
-                        indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
-                        logits[indices_to_remove] = float('-inf')
-                    
-                    # Sample next token
-                    probs = torch.softmax(logits, dim=-1)
-                    next_token = torch.multinomial(probs, num_samples=1)
-                    token_id = next_token.item()
-                    
-                    generated_tokens.append(token_id)
-                    current_ids = torch.cat([current_ids, next_token], dim=1)
-                    
-                    # Stop if EOS
-                    if token_id == tokenizer.eos_token_id:
-                        break
-            
-            # Decode generated tokens
-            sol = tokenizer.decode(generated_tokens, skip_special_tokens=True)
-            generated_solutions.append(sol)
+        with torch.no_grad():
+            for _ in tqdm(range(n_samples), desc="Generating"):
+                gen_output = model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=True,
+                    temperature=temp,
+                    top_p=0.9,
+                    top_k=50,
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=tokenizer.eos_token_id
+                )
+                # Decode and extract solution (remove prompt)
+                full_text = tokenizer.decode(gen_output[0], skip_special_tokens=True)
+                sol = full_text[len(prompt):]
+                generated_solutions.append(sol)
 
         outputs = generated_solutions
         
@@ -241,65 +184,77 @@ Solution:
 
     log.info(f"Solutions: {len(outputs)}, Success rate: {sum(labels)/len(labels):.2%}")
 
-    log.info(f"Extracting hidden states...")
-    hidden_states = []
-
+    log.info(f"Extracting hidden states from {len(outputs)} solutions...")
     token_pos = cfg['analysis']['token_position']
     layer_idx = cfg['analysis']['layer_idx']
-
-    for i, output in enumerate(tqdm(outputs, desc="Extracting")):
-        try:
-            full_text = prompt + output
-            inputs = tokenizer(full_text, return_tensors="pt")
-
-            if inputs['input_ids'].shape[1] >= token_pos:
-                prefix_ids = inputs['input_ids'][0, :token_pos]
-                prefix_text = tokenizer.decode(prefix_ids, skip_special_tokens=True)
-            else:
-                prefix_text = full_text
-
-            h = extract_hidden_state(model, tokenizer, prefix_text, token_pos - 1, layer_idx, device)
-            if h is not None:
-                h_np = h.numpy() if isinstance(h, torch.Tensor) else h
-                # Check for NaN/Inf before appending
-                if np.any(np.isnan(h_np)) or np.any(np.isinf(h_np)):
-                    log.warning(f"Sample {i} has NaN/Inf in hidden state, using zeros")
-                    h_np = np.nan_to_num(h_np, nan=0.0, posinf=0.0, neginf=0.0)
-                hidden_states.append(h_np)
-            else:
-                log.warning(f"Sample {i} failed to extract hidden state, using zeros")
+    
+    # Pre-tokenize prompt once
+    prompt_tokens = tokenizer.encode(prompt, add_special_tokens=False)
+    prompt_len = len(prompt_tokens)
+    
+    # Build full texts (prompt + solution) for all samples
+    # Then extract hidden states after all generation is done
+    hidden_states = []
+    
+    with torch.no_grad():
+        for i, solution in enumerate(tqdm(outputs, desc="Extracting hidden states")):
+            try:
+                # Build full text: prompt + solution
+                full_text = prompt + solution
+                
+                # Tokenize and get prefix up to token_pos
+                full_tokens = tokenizer.encode(full_text, add_special_tokens=False)
+                if len(full_tokens) >= token_pos:
+                    prefix_tokens = full_tokens[:token_pos]
+                else:
+                    prefix_tokens = full_tokens
+                
+                # Convert to tensor
+                prefix_tensor = torch.tensor([prefix_tokens], device=device)
+                
+                # Extract hidden state using hook
+                hidden_state = None
+                def hook_fn(module, input, output):
+                    nonlocal hidden_state
+                    hidden = output[0] if isinstance(output, tuple) else output
+                    extract_pos = min(token_pos - 1, hidden.shape[1] - 1)
+                    hidden_state = hidden[0, extract_pos, :].detach().cpu()
+                    # Fix NaN/Inf immediately
+                    if torch.any(torch.isnan(hidden_state)) or torch.any(torch.isinf(hidden_state)):
+                        hidden_state = torch.nan_to_num(hidden_state, nan=0.0, posinf=0.0, neginf=0.0)
+                
+                hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
+                _ = model(prefix_tensor)
+                hook.remove()
+                
+                if hidden_state is not None:
+                    h_np = hidden_state.numpy()
+                    # Final safety check
+                    if np.any(np.isnan(h_np)) or np.any(np.isinf(h_np)):
+                        h_np = np.nan_to_num(h_np, nan=0.0, posinf=0.0, neginf=0.0)
+                    hidden_states.append(h_np)
+                else:
+                    log.warning(f"Sample {i} failed to extract hidden state")
+                    hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
+                    hidden_states.append(np.zeros(hidden_dim))
+            except Exception as e:
+                log.error(f"Error extracting hidden state for sample {i}: {e}")
                 hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
                 hidden_states.append(np.zeros(hidden_dim))
-        except Exception as e:
-            log.error(f"Error extracting hidden state for sample {i}: {e}")
-            # Use zeros as fallback
-            hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
-            hidden_states.append(np.zeros(hidden_dim))
 
     # Greedy solution (temperature=0, deterministic)
     log.info("Generating greedy solution...")
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
-    prompt_ids = inputs['input_ids']
-    current_ids = prompt_ids.clone()
-    greedy_tokens = []
-    
     with torch.no_grad():
-        for _ in range(max_new_tokens):
-            outputs = model(current_ids)
-            logits = outputs.logits[:, -1, :]
-            
-            # Greedy: take argmax (no temperature)
-            next_token = torch.argmax(logits, dim=-1, keepdim=True)
-            token_id = next_token.item()
-            
-            greedy_tokens.append(token_id)
-            current_ids = torch.cat([current_ids, next_token], dim=1)
-            
-            # Stop if EOS
-            if token_id == tokenizer.eos_token_id:
-                break
-    
-    greedy_solution = tokenizer.decode(greedy_tokens, skip_special_tokens=True)
+        greedy_output = model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,  # Greedy
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id
+        )
+    greedy_text = tokenizer.decode(greedy_output[0], skip_special_tokens=True)
+    greedy_solution = greedy_text[len(prompt):]
     greedy_correct = grade_math(greedy_solution, problem['answer'])
 
     greedy_inputs = tokenizer(greedy_text, return_tensors="pt")
