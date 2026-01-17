@@ -146,21 +146,28 @@ Solution:
         
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
         
-        # Use HuggingFace generate - it handles temperature/top_p correctly
-        # The warnings are just warnings, the parameters DO work
+        # Use HuggingFace generate - suppress warnings about generation config
+        # Suppress the generation config warning - it's harmless
+        import warnings
+        import os
+        # Set environment variable to suppress the warning
+        os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
+        
         generated_solutions = []
         with torch.no_grad():
             for _ in tqdm(range(n_samples), desc="Generating"):
-                gen_output = model.generate(
+                # Only pass sampling params when do_sample=True
+                gen_kwargs = {
                     **inputs,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=True,
-                    temperature=temp,
-                    top_p=0.9,
-                    top_k=50,
-                    pad_token_id=tokenizer.pad_token_id,
-                    eos_token_id=tokenizer.eos_token_id
-                )
+                    "max_new_tokens": max_new_tokens,
+                    "do_sample": True,
+                    "temperature": temp,
+                    "top_p": 0.9,
+                    "top_k": 50,
+                    "pad_token_id": tokenizer.pad_token_id,
+                    "eos_token_id": tokenizer.eos_token_id
+                }
+                gen_output = model.generate(**gen_kwargs)
                 # Decode and extract solution (remove prompt)
                 full_text = tokenizer.decode(gen_output[0], skip_special_tokens=True)
                 sol = full_text[len(prompt):]
@@ -192,34 +199,46 @@ Solution:
     prompt_tokens = tokenizer.encode(prompt, add_special_tokens=False)
     prompt_len = len(prompt_tokens)
     
-    # Build full texts (prompt + solution) for all samples
-    # Then extract hidden states after all generation is done
+    # Extract hidden states at token_position (only first token_pos tokens, not full solution)
+    # We only need the prefix up to token_pos for PCA
     hidden_states = []
+    
+    # Pre-tokenize prompt to get its length
+    prompt_token_ids = tokenizer.encode(prompt, add_special_tokens=False)
+    prompt_len = len(prompt_token_ids)
     
     with torch.no_grad():
         for i, solution in enumerate(tqdm(outputs, desc="Extracting hidden states")):
             try:
-                # Build full text: prompt + solution
-                full_text = prompt + solution
+                # We only need tokens up to token_pos (which includes prompt + some solution tokens)
+                # Tokenize just enough of the solution to reach token_pos total
+                solution_tokens = tokenizer.encode(solution, add_special_tokens=False)
                 
-                # Tokenize and get prefix up to token_pos
-                full_tokens = tokenizer.encode(full_text, add_special_tokens=False)
-                if len(full_tokens) >= token_pos:
-                    prefix_tokens = full_tokens[:token_pos]
+                # Calculate how many solution tokens we need
+                tokens_needed = max(0, token_pos - prompt_len)
+                if tokens_needed > 0 and len(solution_tokens) > 0:
+                    # Take only the first tokens_needed tokens from solution
+                    prefix_solution_tokens = solution_tokens[:tokens_needed]
+                    prefix_tokens = prompt_token_ids + prefix_solution_tokens
                 else:
-                    prefix_tokens = full_tokens
+                    # If prompt is already >= token_pos, just use prompt up to token_pos
+                    prefix_tokens = prompt_token_ids[:token_pos]
+                
+                # Ensure we have exactly token_pos tokens (or less if not enough)
+                prefix_tokens = prefix_tokens[:token_pos]
                 
                 # Convert to tensor
                 prefix_tensor = torch.tensor([prefix_tokens], device=device)
                 
-                # Extract hidden state using hook
+                # Extract hidden state at token_pos-1 (0-indexed)
                 hidden_state = None
                 def hook_fn(module, input, output):
                     nonlocal hidden_state
                     hidden = output[0] if isinstance(output, tuple) else output
+                    # Extract at position token_pos-1 (last token of prefix)
                     extract_pos = min(token_pos - 1, hidden.shape[1] - 1)
-                    hidden_state = hidden[0, extract_pos, :].detach().cpu()
-                    # Fix NaN/Inf immediately
+                    hidden_state = hidden[0, extract_pos, :].detach()
+                    # Fix NaN/Inf immediately on GPU
                     if torch.any(torch.isnan(hidden_state)) or torch.any(torch.isinf(hidden_state)):
                         hidden_state = torch.nan_to_num(hidden_state, nan=0.0, posinf=0.0, neginf=0.0)
                 
@@ -228,19 +247,22 @@ Solution:
                 hook.remove()
                 
                 if hidden_state is not None:
-                    h_np = hidden_state.numpy()
-                    # Final safety check
+                    # Move to CPU and convert to numpy
+                    h_np = hidden_state.cpu().numpy().astype(np.float32)  # Use float32 to prevent overflow
+                    # Final safety check and clamp extreme values
                     if np.any(np.isnan(h_np)) or np.any(np.isinf(h_np)):
                         h_np = np.nan_to_num(h_np, nan=0.0, posinf=0.0, neginf=0.0)
+                    # Clamp to reasonable range to prevent PCA overflow
+                    h_np = np.clip(h_np, -100.0, 100.0)
                     hidden_states.append(h_np)
                 else:
                     log.warning(f"Sample {i} failed to extract hidden state")
                     hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
-                    hidden_states.append(np.zeros(hidden_dim))
+                    hidden_states.append(np.zeros(hidden_dim, dtype=np.float32))
             except Exception as e:
                 log.error(f"Error extracting hidden state for sample {i}: {e}")
                 hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
-                hidden_states.append(np.zeros(hidden_dim))
+                hidden_states.append(np.zeros(hidden_dim, dtype=np.float32))
 
     # Greedy solution (temperature=0, deterministic)
     log.info("Generating greedy solution...")
@@ -257,81 +279,123 @@ Solution:
     greedy_solution = greedy_text[len(prompt):]
     greedy_correct = grade_math(greedy_solution, problem['answer'])
 
-    greedy_inputs = tokenizer(greedy_text, return_tensors="pt")
-    if greedy_inputs['input_ids'].shape[1] >= token_pos:
-        greedy_prefix_ids = greedy_inputs['input_ids'][0, :token_pos]
-        greedy_prefix_text = tokenizer.decode(greedy_prefix_ids, skip_special_tokens=True)
-    else:
-        greedy_prefix_text = greedy_text
+    # Extract greedy hidden state at token_pos (only first token_pos tokens)
+    # Use the same approach as for other solutions
+    greedy_token_ids = tokenizer.encode(greedy_text, add_special_tokens=False)
+    greedy_prefix_ids = greedy_token_ids[:token_pos]
+    greedy_prefix_tensor = torch.tensor([greedy_prefix_ids], device=device)
+    
+    greedy_hidden = None
+    def greedy_hook_fn(module, input, output):
+        nonlocal greedy_hidden
+        hidden = output[0] if isinstance(output, tuple) else output
+        extract_pos = min(token_pos - 1, hidden.shape[1] - 1)
+        greedy_hidden = hidden[0, extract_pos, :].detach()
+        # Fix NaN/Inf immediately
+        if torch.any(torch.isnan(greedy_hidden)) or torch.any(torch.isinf(greedy_hidden)):
+            greedy_hidden = torch.nan_to_num(greedy_hidden, nan=0.0, posinf=0.0, neginf=0.0)
+    
+    greedy_hook = model.model.layers[layer_idx].register_forward_hook(greedy_hook_fn)
+    with torch.no_grad():
+        _ = model(greedy_prefix_tensor)
+    greedy_hook.remove()
+    
+    if greedy_hidden is None:
+        hidden_dim = model.config.hidden_size if hasattr(model.config, 'hidden_size') else 4096
+        greedy_hidden = torch.zeros(hidden_dim, device=device)
+    
+    # Move to CPU for consistency
+    greedy_hidden = greedy_hidden.cpu()
 
-    greedy_hidden = extract_hidden_state(model, tokenizer, greedy_prefix_text, token_pos - 1, layer_idx, device)
-
-    # PCA
-    hidden_states = np.array(hidden_states)
-    labels = np.array(labels)
+    # Convert to numpy array with proper dtype
+    hidden_states = np.array(hidden_states, dtype=np.float32)
+    labels = np.array(labels, dtype=np.int32)  # Explicitly set dtype to int32
 
     log.info(f"Success: {labels.sum()}/{len(labels)}, Greedy: {'CORRECT' if greedy_correct else 'INCORRECT'}")
 
-    # Check for variance and handle potential overflow
+    # PCA with robust error handling
     if len(hidden_states) > 1:
-        # Convert to numpy and check for issues
-        hidden_states = np.array(hidden_states)
-        
-        # Check for NaN or Inf values
-        nan_mask = np.isnan(hidden_states)
-        inf_mask = np.isinf(hidden_states)
-        if np.any(nan_mask) or np.any(inf_mask):
-            log.warning(f"Hidden states contain NaN/Inf: {np.sum(nan_mask)} NaN, {np.sum(inf_mask)} Inf. Replacing with zeros.")
-            hidden_states = np.nan_to_num(hidden_states, nan=0.0, posinf=0.0, neginf=0.0)
-        
-        # Clip extreme values to prevent overflow
-        max_val = np.percentile(np.abs(hidden_states), 99.9)
-        if max_val > 1000:
-            log.warning(f"Clipping extreme hidden state values (max={max_val:.2f})")
-            hidden_states = np.clip(hidden_states, -1000, 1000)
+        # Final cleanup: ensure no NaN/Inf
+        hidden_states = np.nan_to_num(hidden_states, nan=0.0, posinf=0.0, neginf=0.0)
+        # Clip to prevent overflow in PCA
+        hidden_states = np.clip(hidden_states, -50.0, 50.0)
         
         # Check variance
         variance = np.var(hidden_states)
         if variance < 1e-9:
             log.warning("Hidden states have near-zero variance. All samples likely identical.")
-            hidden_2d = np.zeros((len(hidden_states), 2))
-            greedy_2d = np.zeros((2,))
-            explained_variance = np.array([0.0, 0.0])
+            hidden_2d = np.zeros((len(hidden_states), 2), dtype=np.float64)
+            greedy_2d = np.zeros((2,), dtype=np.float64)
+            explained_variance = np.array([0.0, 0.0], dtype=np.float64)
         else:
             try:
-                # Center the data to prevent overflow
-                hidden_states_mean = np.mean(hidden_states, axis=0, dtype=np.float64)
-                hidden_states_centered = hidden_states.astype(np.float64) - hidden_states_mean
+                # Convert to float64 for PCA (more stable)
+                hidden_states_f64 = hidden_states.astype(np.float64)
                 
-                # Use float64 for PCA to prevent overflow
-                pca = PCA(n_components=2)
-                hidden_2d = pca.fit_transform(hidden_states_centered)
+                # Check for constant features (zero variance) and remove them
+                feature_vars = np.var(hidden_states_f64, axis=0)
+                valid_features = feature_vars > 1e-10
                 
-                # Transform greedy hidden state
-                greedy_hidden_np = greedy_hidden.numpy().astype(np.float64).reshape(1, -1)
-                greedy_centered = greedy_hidden_np - hidden_states_mean
-                greedy_2d = pca.transform(greedy_centered)[0]
-                
-                explained_variance = pca.explained_variance_ratio_
-                
-                # Check for NaN in results
-                if np.any(np.isnan(hidden_2d)) or np.any(np.isnan(greedy_2d)):
-                    log.error("PCA produced NaN values. Using zeros.")
-                    hidden_2d = np.zeros((len(hidden_states), 2))
-                    greedy_2d = np.zeros((2,))
-                    explained_variance = np.array([0.0, 0.0])
+                if np.sum(valid_features) < 2:
+                    log.warning("Not enough features with variance for PCA. Using zeros.")
+                    hidden_2d = np.zeros((len(hidden_states), 2), dtype=np.float64)
+                    greedy_2d = np.zeros((2,), dtype=np.float64)
+                    explained_variance = np.array([0.0, 0.0], dtype=np.float64)
+                else:
+                    # Use only valid features
+                    hidden_states_valid = hidden_states_f64[:, valid_features]
+                    
+                    # Center the data
+                    hidden_states_mean = np.mean(hidden_states_valid, axis=0)
+                    hidden_states_centered = hidden_states_valid - hidden_states_mean
+                    
+                    # Check total variance before PCA
+                    total_var = np.var(hidden_states_centered)
+                    if total_var < 1e-10:
+                        log.warning("Total variance too small for PCA. Using zeros.")
+                        hidden_2d = np.zeros((len(hidden_states), 2), dtype=np.float64)
+                        greedy_2d = np.zeros((2,), dtype=np.float64)
+                        explained_variance = np.array([0.0, 0.0], dtype=np.float64)
+                    else:
+                        # PCA with error handling
+                        pca = PCA(n_components=min(2, hidden_states_valid.shape[1]))
+                        hidden_2d = pca.fit_transform(hidden_states_centered)
+                        
+                        # Transform greedy hidden state
+                        greedy_hidden_np = greedy_hidden.numpy().astype(np.float64)
+                        # Clean and clip greedy hidden state
+                        greedy_hidden_np = np.nan_to_num(greedy_hidden_np, nan=0.0, posinf=0.0, neginf=0.0)
+                        greedy_hidden_np = np.clip(greedy_hidden_np, -50.0, 50.0)
+                        greedy_hidden_valid = greedy_hidden_np[valid_features].reshape(1, -1)
+                        greedy_centered = greedy_hidden_valid - hidden_states_mean
+                        greedy_2d = pca.transform(greedy_centered)[0]
+                        
+                        explained_variance = pca.explained_variance_ratio_
+                        
+                        # Ensure we have 2 components (pad if needed)
+                        if hidden_2d.shape[1] < 2:
+                            hidden_2d = np.pad(hidden_2d, ((0, 0), (0, 2 - hidden_2d.shape[1])), mode='constant')
+                            greedy_2d = np.pad(greedy_2d, (0, 2 - len(greedy_2d)), mode='constant')
+                            explained_variance = np.pad(explained_variance, (0, 2 - len(explained_variance)), mode='constant')
+                        
+                        # Final check for NaN in results
+                        if np.any(np.isnan(hidden_2d)) or np.any(np.isnan(greedy_2d)) or np.any(np.isnan(explained_variance)):
+                            log.error("PCA produced NaN values. Using zeros.")
+                            hidden_2d = np.zeros((len(hidden_states), 2), dtype=np.float64)
+                            greedy_2d = np.zeros((2,), dtype=np.float64)
+                            explained_variance = np.array([0.0, 0.0], dtype=np.float64)
             except Exception as e:
                 log.error(f"PCA failed: {e}")
                 import traceback
                 log.error(traceback.format_exc())
-                hidden_2d = np.zeros((len(hidden_states), 2))
-                greedy_2d = np.zeros((2,))
-                explained_variance = np.array([0.0, 0.0])
+                hidden_2d = np.zeros((len(hidden_states), 2), dtype=np.float64)
+                greedy_2d = np.zeros((2,), dtype=np.float64)
+                explained_variance = np.array([0.0, 0.0], dtype=np.float64)
     else:
         log.warning("Not enough samples for PCA (need at least 2)")
-        hidden_2d = np.zeros((len(hidden_states), 2))
-        greedy_2d = np.zeros((2,))
-        explained_variance = np.array([0.0, 0.0])
+        hidden_2d = np.zeros((len(hidden_states), 2), dtype=np.float64)
+        greedy_2d = np.zeros((2,), dtype=np.float64)
+        explained_variance = np.array([0.0, 0.0], dtype=np.float64)
 
     results = {
         'hidden_2d': hidden_2d,
@@ -360,15 +424,29 @@ Solution:
 
     # Save results with proper error handling
     try:
-        # Convert numpy arrays to lists, handle NaN/Inf
+        # Convert numpy arrays to lists, handle NaN/Inf properly
         results_to_save = {}
         for k, v in results.items():
             if isinstance(v, np.ndarray):
-                # Replace NaN/Inf with None for JSON compatibility
-                v_clean = np.nan_to_num(v, nan=None, posinf=None, neginf=None)
-                results_to_save[k] = v_clean.tolist()
+                # Check if array is numeric (not object dtype)
+                if v.dtype == object or not np.issubdtype(v.dtype, np.number):
+                    # Non-numeric array (strings, mixed types, etc.) - convert directly
+                    results_to_save[k] = v.tolist()
+                else:
+                    # Numeric array - can safely use nan_to_num
+                    # Check if it's integer type (no NaN possible)
+                    if np.issubdtype(v.dtype, np.integer):
+                        results_to_save[k] = v.tolist()
+                    else:
+                        # Floating point - clean NaN/Inf
+                        v_clean = np.nan_to_num(v, nan=0.0, posinf=0.0, neginf=0.0)
+                        results_to_save[k] = v_clean.tolist()
             elif isinstance(v, (np.integer, np.floating)):
-                results_to_save[k] = float(v) if not np.isnan(v) and not np.isinf(v) else None
+                # Convert numpy scalars to Python types
+                if np.isnan(v) or np.isinf(v):
+                    results_to_save[k] = 0.0
+                else:
+                    results_to_save[k] = float(v)
             else:
                 results_to_save[k] = v
         
