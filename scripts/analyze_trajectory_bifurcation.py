@@ -109,22 +109,66 @@ Solution:
         return hard_problems
 
     def generate_solution(self, prompt: str, temperature: float = 0.6) -> str:
-        """Generate a single solution."""
+        """Generate a single solution using manual token-by-token generation."""
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-
+        prompt_ids = inputs['input_ids']
+        current_ids = prompt_ids.clone()
+        generated_tokens = []
+        
+        max_new_tokens = 4096
+        top_k_value = 50
+        top_p_value = 0.9
+        
         with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=4096,  # Updated to 4096 for math problems
-                temperature=temperature,
-                top_k=50,
-                top_p=0.9,
-                do_sample=True
-            )
-
-        full_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        # Extract just the generated part
-        solution = full_text[len(prompt):]
+            for _ in range(max_new_tokens):
+                outputs = self.model(current_ids)
+                logits = outputs.logits[:, -1, :]  # [1, vocab_size]
+                
+                # Handle greedy decoding
+                if temperature == 0:
+                    next_token = torch.argmax(logits, dim=-1, keepdim=True)
+                    token_id = next_token.item()
+                    generated_tokens.append(token_id)
+                    current_ids = torch.cat([current_ids, next_token], dim=1)
+                    if token_id == self.tokenizer.eos_token_id:
+                        break
+                    continue
+                
+                # Apply temperature
+                logits = logits / temperature
+                
+                # Apply top_k filtering
+                if top_k_value > 0 and top_k_value < logits.shape[-1]:
+                    top_k_logits, top_k_indices = torch.topk(logits, top_k_value, dim=-1)
+                    top_k_mask = torch.zeros_like(logits, dtype=torch.bool)
+                    top_k_mask.scatter_(-1, top_k_indices, True)
+                    logits = logits.masked_fill(~top_k_mask, float('-inf'))
+                
+                # Apply top_p (nucleus) filtering
+                if top_p_value < 1.0:
+                    sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+                    sorted_probs = torch.softmax(sorted_logits, dim=-1)
+                    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+                    
+                    sorted_indices_to_remove = cumulative_probs > top_p_value
+                    sorted_indices_to_remove[..., 0] = False  # Keep at least one
+                    indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+                    logits[indices_to_remove] = float('-inf')
+                
+                # Sample next token
+                probs = torch.softmax(logits, dim=-1)
+                next_token = torch.multinomial(probs, num_samples=1)
+                token_id = next_token.item()
+                
+                generated_tokens.append(token_id)
+                current_ids = torch.cat([current_ids, next_token], dim=1)
+                
+                # Stop if EOS
+                if token_id == self.tokenizer.eos_token_id:
+                    break
+        
+        # Decode generated tokens
+        solution = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
         return solution
 
     def extract_hidden_state_at_position(
