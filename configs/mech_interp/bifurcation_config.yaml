@@ -26,5 +26,6 @@ output_dir: "mech_interp/bifurcation_results"
 api:
   model_name: "qwen/qwen3-8b"  # Model to use for generation
   base_url: "https://openrouter.ai/api/v1"
-  api_key_env: "OPENROUTER_API_KEY"
+  api_key: "YOUR_API_KEY_HERE"  # Put your OpenRouter API key directly here (or use api_key_env)
+  # api_key_env: "OPENROUTER_API_KEY"  # Alternative: use environment variable name
   max_workers: 15  # Number of threads for parallel generation

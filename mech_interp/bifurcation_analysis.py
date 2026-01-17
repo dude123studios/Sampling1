@@ -185,17 +185,73 @@ Solution:
         # Initialize API model for generation
         api_config = cfg.get('api', {})
         if not api_config:
-            raise ValueError("API configuration required. Add 'api' section to config with model_name, base_url, api_key_env")
+            raise ValueError("API configuration required. Add 'api' section to config with model_name, base_url, and api_key")
         
+        # Allow API key to be specified directly in config or via environment variable
+        api_key = api_config.get('api_key', None)
+        if not api_key:
+            api_key_env = api_config.get('api_key_env', 'OPENROUTER_API_KEY')
+            api_key = os.getenv(api_key_env)
+            if not api_key:
+                raise ValueError(f"API key not found. Either set 'api_key' in config or set environment variable '{api_key_env}'")
+        
+        # Create a custom config that includes the API key directly
         api_model_cfg = DictConfig({
             'type': 'api',
             'provider': 'openrouter',
             'model_name': api_config.get('model_name', 'qwen/qwen3-8b'),
             'base_url': api_config.get('base_url', 'https://openrouter.ai/api/v1'),
-            'api_key_env': api_config.get('api_key_env', 'OPENROUTER_API_KEY')
+            'api_key': api_key  # Pass key directly
         })
         
-        api_model = APIModel(api_model_cfg)
+        # Create API model with direct key access
+        class DirectAPIModel:
+            def __init__(self, config):
+                self.api_key = config.api_key
+                self.base_url = config.base_url
+                self.model_name = config.model_name
+            
+            def generate(self, prompt: str, **kwargs):
+                import requests
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "HTTP-Referer": "https://neurips-experiment.com",
+                    "X-Title": "Sampling Limits NeurIPS",
+                    "Content-Type": "application/json"
+                }
+                
+                messages = [{"role": "user", "content": prompt}]
+                
+                data = {
+                    "model": self.model_name,
+                    "messages": messages,
+                    "temperature": kwargs.get('temperature', 0.7),
+                    "max_tokens": kwargs.get('max_new_tokens', 4096),
+                    "top_p": kwargs.get('top_p', 1.0),
+                    "top_k": kwargs.get('top_k', None)
+                }
+                if data['top_k'] is None:
+                    del data['top_k']
+                
+                retries = 3
+                for i in range(retries):
+                    try:
+                        response = requests.post(
+                            f"{self.base_url}/chat/completions",
+                            headers=headers,
+                            json=data,
+                            timeout=kwargs.get('timeout', 300)
+                        )
+                        response.raise_for_status()
+                        resp_json = response.json()
+                        return resp_json['choices'][0]['message']['content']
+                    except Exception as e:
+                        if i == retries - 1:
+                            raise e
+                        import time
+                        time.sleep(2 ** i)
+        
+        api_model = DirectAPIModel(api_model_cfg)
         max_workers = api_config.get('max_workers', 15)
         log.info(f"Using {max_workers} threads for generation")
         
