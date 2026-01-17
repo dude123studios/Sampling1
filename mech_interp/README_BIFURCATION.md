@@ -37,9 +37,10 @@ analysis:
 
 **Note**:
 - Uses existing sweep data with 5 samples
-- Automatically finds level 5 problems with 1-2/5 solve rate
-- Qwen found: `test/intermediate_algebra/1994.json` (1/5)
-- DeepSeek found: `test/intermediate_algebra/1994.json` (2/5)
+- Finds level 5 problems with `num_correct == 1` (exactly 1/5 solve rate)
+- Returns the **second** problem found (skips first)
+- Qwen uses: `test/algebra/2427.json`
+- DeepSeek uses: `test/counting_and_probability/525.json`
 
 ## Output
 

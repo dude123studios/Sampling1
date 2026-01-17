@@ -53,7 +53,7 @@ def load_sweep_problem(sweep_dir: Path, temperature: str, model_filter: str):
 
         problem_count = 0
         level5_count = 0
-        hard_count = 0
+        found_count = 0  # Track how many suitable problems we've found
 
         with open(log_file) as f:
             for line in f:
@@ -66,21 +66,26 @@ def load_sweep_problem(sweep_dir: Path, temperature: str, model_filter: str):
 
                     problem_count += 1
 
-                    # Check for level 5 problem with 1-2/5 correct
-                    if 'outputs' in entry and 'scores' in entry:
+                    # Check for level 5 problem with exactly 1 correct (num_correct == 1)
+                    if 'outputs' in entry and 'metrics' in entry:
                         level = entry.get('level')
-                        scores = entry['scores']
-                        n = len(scores)
-                        c = sum(scores)
+                        metrics = entry.get('metrics', {})
+                        num_correct = metrics.get('num_correct')
 
                         if level == 5:
                             level5_count += 1
 
-                        # Level 5 with 1 or 2 correct out of 5
-                        if level == 5 and c in [1, 2] and n == 5:
-                            hard_count += 1
+                        # Level 5 with exactly 1 correct
+                        if level == 5 and num_correct == 1:
+                            found_count += 1
                             dataset_id = entry.get('dataset_id', '')
-                            log.info(f"Found level 5 hard problem: {dataset_id} ({c}/5 correct)")
+
+                            # Skip first problem, use second one
+                            if found_count == 1:
+                                log.info(f"Skipping first problem: {dataset_id} (1 correct)")
+                                continue
+
+                            log.info(f"Found level 5 problem #{found_count}: {dataset_id} (num_correct=1)")
 
                             # Load actual problem from dataset
                             from datasets import load_dataset
@@ -103,14 +108,14 @@ def load_sweep_problem(sweep_dir: Path, temperature: str, model_filter: str):
                                 'problem': problem_text,
                                 'answer': entry.get('gold', ''),
                                 'outputs': entry['outputs'],
-                                'correctness': [bool(s) for s in scores],
+                                'correctness': [bool(s) for s in entry['scores']],
                                 'level': level
                             }
                 except Exception as e:
                     log.debug(f"Error parsing entry: {e}")
                     continue
 
-        log.info(f"Scanned {problem_count} problems, {level5_count} level 5, {hard_count} hard (1-2/5)")
+        log.info(f"Scanned {problem_count} problems, {level5_count} level 5, {found_count} with num_correct=1")
 
     log.error("No suitable problem found")
 
