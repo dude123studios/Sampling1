@@ -1,0 +1,41 @@
+# Configuration for Temperature Switching Experiment
+# This experiment tests if generating the first N tokens with temperature=0 (deterministic)
+# and then switching to temperature=0.6 improves model performance
+
+# Source experiment results (can be path to specific log.jsonl or will be auto-detected)
+source_results: null  # Will auto-detect most recent if null
+
+# Filter criteria for selecting problems
+# Only use problems where the model got exactly min_correct to max_correct solutions right
+filter_criteria:
+  min_correct: 1  # At least 1 correct
+  max_correct: 2  # At most 2 correct (not too easy, not too hard)
+
+# Temperature switching parameters
+switch_token_count: 16  # Number of tokens to generate with initial temperature (configurable)
+initial_temperature: 0.0  # Temperature for first N tokens (deterministic)
+continuation_temperature: 0.6  # Temperature for remaining tokens
+
+# Target models to test (API models via OpenRouter)
+target_models:
+  - name: "qwen3-8b"
+    model_name: "qwen/qwen3-8b"
+
+# Sampling parameters for continuation
+max_new_tokens: 4096
+top_p: 1.0
+
+# Task configuration
+task:
+  name: "math"
+  dataset: "HuggingFaceH4/MATH-500"
+  split: "test"
+  level_filter: null  # Use all levels, or set to 5 for hardest only
+
+# Output directory
+output_dir: "results/improvement_methods/temperature_switching"
+
+# API configuration
+api:
+  base_url: "https://openrouter.ai/api/v1"
+  api_key_env: "OPENROUTER_API_KEY"

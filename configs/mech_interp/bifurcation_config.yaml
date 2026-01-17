@@ -1,0 +1,23 @@
+model:
+  name: "qwen3-8b"
+  model_id: "Qwen/Qwen2.5-Math-7B-Instruct"
+  device: "cuda"
+  dtype: "float16"
+
+# Data source - use existing sweep results
+data_source:
+  sweep_dir: "results/sweeps/temperature_sweep"
+  temperature: "0.6"  # Which temperature to analyze
+  model_filter: "qwen3-8b"  # Filter for this model in sweep
+  min_samples: 5  # Need at least this many samples per problem
+  target_pass_rate: [0.15, 0.25]  # Range for "hard" problems
+
+# Analysis parameters
+analysis:
+  n_samples: 100  # Total solutions to analyze (use existing + generate more if needed)
+  token_position: 16  # Which token to extract hidden state
+  layer_idx: 10  # Which layer to analyze
+  temperature: 0.6  # For any additional generation needed
+
+# Output
+output_dir: "mech_interp/bifurcation_results"

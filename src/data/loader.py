@@ -61,6 +61,10 @@ def load_task_data(task_config, limit=None, seed=42):
         ds = load_dataset(task_config.dataset, task_config.subset_name, split=task_config.split)
     elif task_config.name == "code":
         ds = load_dataset(task_config.dataset, split=task_config.split)
+    elif task_config.name == "humaneval":
+        # HumanEval: 164 hand-written programming problems
+        ds = load_dataset("openai_humaneval", split="test")
+        logger.info(f"Loaded {len(ds)} HumanEval problems")
     else:
         raise ValueError(f"Unknown task: {task_config.name}")
 

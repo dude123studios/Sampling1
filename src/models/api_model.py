@@ -30,24 +30,32 @@ class APIModel(BaseModel):
              messages.append({"role": "assistant", "content": prefix})
 
         # Default params
+        n = kwargs.get('n', 1)
         data = {
             "model": self.model_name,
             "messages": messages,
             "temperature": kwargs.get('temperature', 0.7),
             "max_tokens": kwargs.get('max_new_tokens', 4096),
-            "top_p": kwargs.get('top_p', 1.0)
+            "top_p": kwargs.get('top_p', 1.0),
+            "n": n
         }
+
+        # Add top_k if specified
+        if 'top_k' in kwargs:
+            data['top_k'] = kwargs['top_k']
         
         retries = 3
         last_error = None
         
+        current_timeout = kwargs.get('timeout', 300)
+
         for i in range(retries):
             try:
                 response = requests.post(
                     f"{self.base_url}/chat/completions",
                     headers=headers,
                     json=data,
-                    timeout=60
+                    timeout=current_timeout
                 )
                 
                 if response.status_code != 200:
@@ -59,25 +67,22 @@ class APIModel(BaseModel):
                 if 'choices' not in resp_json:
                     print(f"API Error (Unexpected Format): {resp_json}")
                     raise KeyError("'choices' not found in response")
-                message = resp_json['choices'][0]['message']
                 
-                content = message.get('content', '')
-                reasoning = message.get('reasoning', '')
-                
-                # Some models (DeepSeek/Qwen-Math) put chain of thought in 'reasoning'
-                if reasoning:
-                    combined_output = f"{reasoning}\n\n{content}"
-                    # If we had a prefix, we should technically prepend it to the output if the API doesn't echo it
-                    # But typically APIs return the *new* content. 
-                    # If the user wants the *full* completion including prefix, we might need to handle that.
-                    # Current usage in run_oracle_prefix_experiment.py expects the model output.
-                    # We will return just the generated part as is standard for chat completions.
-                    return combined_output
-                
-                if content is None: 
-                    content = ""
+                extracted_contents = []
+                for choice in resp_json['choices']:
+                    message = choice['message']
+                    content = message.get('content', '')
+                    reasoning = message.get('reasoning', '')
                     
-                return content
+                    if reasoning:
+                        combined_output = f"{reasoning}\n\n{content}"
+                        extracted_contents.append(combined_output)
+                    else:
+                        extracted_contents.append(content if content is not None else "")
+                
+                if n == 1:
+                    return extracted_contents[0]
+                return extracted_contents
                 
             except Exception as e:
                 print(f"Request failed (Attempt {i+1}): {e}")

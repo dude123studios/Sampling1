@@ -1,0 +1,20 @@
+model:
+  name: "deepseek-qwen3-8b"
+  model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+  device: "cuda"
+  dtype: "float16"
+
+data_source:
+  sweep_dir: "results/sweeps/temperature_sweep"
+  temperature: "0.6"
+  model_filter: "deepseek-qwen3-8b"
+  min_samples: 5
+  target_pass_rate: [0.15, 0.25]
+
+analysis:
+  n_samples: 100
+  token_position: 16
+  layer_idx: 10
+  temperature: 0.6
+
+output_dir: "mech_interp/bifurcation_results"

@@ -30,6 +30,12 @@ Code:
 ```python
 """
 
+# HumanEval prompt following Wei et al. (2024) format
+HUMANEVAL_SYSTEM_PROMPT = "You are an exceptionally intelligent coding assistant that consistently delivers accurate and reliable responses to user instructions."
+
+HUMANEVAL_USER_PROMPT = """@@ Instruction
+{instruction}"""
+
 def get_prompt(task_name, item):
     if task_name == "math":
         return MATH_PROMPT.format(problem=item['problem'])
@@ -37,7 +43,7 @@ def get_prompt(task_name, item):
         # GPQA structure might vary, assume standard fields or adapt
         # Typically GPQA has 'Question', 'Correct Answer', 'Incorrect Answer 1', etc.
         # Ideally we shuffle choices but for now simplified.
-        # Assuming dataset has 'Question', 'A', 'B', 'C', 'D' pre-formatted or raw. 
+        # Assuming dataset has 'Question', 'A', 'B', 'C', 'D' pre-formatted or raw.
         # The HF dataset usually has 'Question', 'Correct Answer', 'Incorrect Answer 1..3'
         # We need to map them to A,B,C,D. For simplicity here, just a placeholder logic.
         # IMPLEMENTATION DETAIL: Proper shuffling is needed for rigorous eval.
@@ -51,4 +57,8 @@ def get_prompt(task_name, item):
         )
     elif task_name == "code":
         return CODE_PROMPT.format(problem=item['content']) # LiveCodeBench uses 'content'
+    elif task_name == "humaneval":
+        # HumanEval uses prompt (function signature + docstring) as instruction
+        # Returns tuple of (system_prompt, user_prompt) for models that support system messages
+        return HUMANEVAL_USER_PROMPT.format(instruction=item['prompt'])
     return ""
