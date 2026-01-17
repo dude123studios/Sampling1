@@ -154,7 +154,7 @@ Solution:
         os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
         
         generated_solutions = []
-            with torch.no_grad():
+        with torch.no_grad():
             for _ in tqdm(range(n_samples), desc="Generating"):
                 # Only pass sampling params when do_sample=True
                 gen_kwargs = {
@@ -223,7 +223,7 @@ Solution:
                     log.warning(f"Sample {i}: Only {len(full_tokens)} tokens, need {token_pos}. Using all tokens.")
                     prefix_tokens = full_tokens
                     extract_pos = len(full_tokens) - 1  # Last token
-        else:
+                else:
                     # Use exactly token_pos tokens (prompt + first part of solution)
                     prefix_tokens = full_tokens[:token_pos]
                     extract_pos = token_pos - 1  # Extract at the token_pos-th token (0-indexed)
@@ -437,11 +437,6 @@ Solution:
                 hidden_2d = np.zeros((len(hidden_states), 2), dtype=np.float64)
                 greedy_2d = np.zeros((2,), dtype=np.float64)
                 explained_variance = np.array([0.0, 0.0], dtype=np.float64)
-    else:
-        log.warning("Not enough samples for PCA (need at least 2)")
-        hidden_2d = np.zeros((len(hidden_states), 2), dtype=np.float64)
-        greedy_2d = np.zeros((2,), dtype=np.float64)
-        explained_variance = np.array([0.0, 0.0], dtype=np.float64)
 
     results = {
         'hidden_2d': hidden_2d,
@@ -496,7 +491,7 @@ Solution:
             else:
                 results_to_save[k] = v
         
-    with open(output_dir / f"{model_name}_results.json", 'w') as f:
+        with open(output_dir / f"{model_name}_results.json", 'w') as f:
             json.dump(results_to_save, f, indent=2)
         log.info(f"Saved results to {output_dir / f'{model_name}_results.json'}")
     except Exception as e:
