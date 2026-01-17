@@ -51,22 +51,22 @@ def load_problem_directly(problem_id: int = 24):
 def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, layer_idx: int, device: str):
     """Extract hidden state at specific position and layer. Keep on GPU for efficiency."""
     try:
-    inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
-    input_ids = inputs['input_ids']
+        inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
+        input_ids = inputs['input_ids']
 
-    seq_len = input_ids.shape[1]
+        seq_len = input_ids.shape[1]
         actual_pos = min(token_pos, seq_len - 1)  # Ensure valid position
 
-    hidden_state = None
+        hidden_state = None
 
-    def hook_fn(module, input, output):
-        nonlocal hidden_state
+        def hook_fn(module, input, output):
+            nonlocal hidden_state
             try:
-        hidden = output[0] if isinstance(output, tuple) else output
+                hidden = output[0] if isinstance(output, tuple) else output
                 # Extract on GPU, only move to CPU at the end
-        if hidden.shape[1] > actual_pos:
+                if hidden.shape[1] > actual_pos:
                     hidden_state = hidden[0, actual_pos, :].detach()  # Keep on GPU
-        else:
+                else:
                     hidden_state = hidden[0, -1, :].detach()  # Keep on GPU
                 
                 # Check for NaN/Inf and fix immediately (prevent propagation)
@@ -80,12 +80,12 @@ def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, lay
                 log.error(f"Error in hook: {e}")
                 hidden_state = None
 
-    hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
+        hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
 
-    with torch.no_grad():
-        _ = model(input_ids)
+        with torch.no_grad():
+            _ = model(input_ids)
 
-    hook.remove()
+        hook.remove()
         
         if hidden_state is None:
             log.error(f"Failed to extract hidden state, returning zeros")
@@ -312,7 +312,7 @@ Solution:
     else:
         # Should not happen with new logic, but kept for safety
         if len(labels) == 0:
-        labels = [1 if c else 0 for c in problem['correctness']]
+            labels = [1 if c else 0 for c in problem['correctness']]
 
     log.info(f"Solutions: {len(outputs)}, Success rate: {sum(labels)/len(labels):.2%}")
 
@@ -347,7 +347,7 @@ Solution:
                     extract_pos = len(full_tokens) - 1  # Last available token
                     if i == 0:
                         log.warning(f"Sample {i}: Only {len(full_tokens)} tokens, need {token_pos}. Using position {extract_pos}.")
-        else:
+                else:
                     # Use exactly token_pos tokens (prompt + solution tokens up to token_pos)
                     prefix_tokens = full_tokens[:token_pos]
                     extract_pos = token_pos - 1  # Extract at position token_pos-1 (the token_pos-th token, 0-indexed)
@@ -623,7 +623,7 @@ Solution:
             else:
                 results_to_save[k] = v
         
-    with open(output_dir / f"{model_name}_results.json", 'w') as f:
+        with open(output_dir / f"{model_name}_results.json", 'w') as f:
             json.dump(results_to_save, f, indent=2)
         log.info(f"Saved results to {output_dir / f'{model_name}_results.json'}")
     except Exception as e:
