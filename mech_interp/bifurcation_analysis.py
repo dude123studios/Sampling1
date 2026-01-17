@@ -94,10 +94,11 @@ def run_bifurcation_analysis(config_path: str):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Load problem directly (ID 24)
-    problem = load_problem_directly(24)
+    # Load problem directly (configurable ID)
+    problem_id = cfg['analysis'].get('problem_id', 24)
+    problem = load_problem_directly(problem_id)
     if not problem:
-        log.error("Failed to load problem")
+        log.error(f"Failed to load problem {problem_id}")
         return
 
     # Build prompt
@@ -117,33 +118,33 @@ Solution:
     if not outputs:
         n_samples = cfg['analysis'].get('n_samples', 20)
         temp = cfg['analysis'].get('temperature', 0.6)
-        log.info(f"Generating {n_samples} samples for Problem 24 (temp={temp})...")
+        log.info(f"Generating {n_samples} samples for Problem {problem_id} (temp={temp})...")
+        log.info(f"Temperature sampling enabled: do_sample=True, temperature={temp}")
         
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
         
-        batch_size = 5
         generated_solutions = []
         
-        for _ in tqdm(range(0, n_samples, batch_size), desc="Generating"):
-            curr_batch = min(batch_size, n_samples - len(generated_solutions))
+        # Generate samples one at a time for better control and consistency
+        for _ in tqdm(range(n_samples), desc="Generating"):
             with torch.no_grad():
-                # Explicitly pass generation config args
+                # Generate single sequence with temperature sampling
+                # CRITICAL: do_sample=True is required for temperature to have any effect
                 gen_out = model.generate(
                     **inputs,
                     max_new_tokens=1024,
-                    do_sample=True,
-                    temperature=temp,
-                    top_p=0.9, # Ensure diversity
-                    num_return_sequences=curr_batch,
-                    pad_token_id=tokenizer.pad_token_id
+                    do_sample=True,  # Required for temperature sampling
+                    temperature=temp,  # Temperature from config (0.6 default)
+                    top_p=0.9,
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=tokenizer.eos_token_id
                 )
             
             # Decode
-            for seq in gen_out:
-                text = tokenizer.decode(seq, skip_special_tokens=True)
-                # Extract solution part (remove prompt)
-                sol = text[len(prompt):]
-                generated_solutions.append(sol)
+            text = tokenizer.decode(gen_out[0], skip_special_tokens=True)
+            # Extract solution part (remove prompt)
+            sol = text[len(prompt):]
+            generated_solutions.append(sol)
 
         outputs = generated_solutions
         
@@ -186,7 +187,13 @@ Solution:
     log.info("Generating greedy solution...")
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
     with torch.no_grad():
-        greedy_output = model.generate(**inputs, max_new_tokens=2048, temperature=0.0, do_sample=False)
+        greedy_output = model.generate(
+            **inputs, 
+            max_new_tokens=2048, 
+            do_sample=False,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id
+        )
     greedy_text = tokenizer.decode(greedy_output[0], skip_special_tokens=True)
     greedy_solution = greedy_text[len(prompt):]
     greedy_correct = grade_math(greedy_solution, problem['answer'])
@@ -206,24 +213,45 @@ Solution:
 
     log.info(f"Success: {labels.sum()}/{len(labels)}, Greedy: {'CORRECT' if greedy_correct else 'INCORRECT'}")
 
-    # Check for variance
-    if len(hidden_states) > 1 and np.var(hidden_states) < 1e-9:
-        log.warning("Hidden states have near-zero variance. All samples likely identical.")
-        # Create a dummy 2D projection
-        hidden_2d = np.zeros((len(hidden_states), 2))
-        greedy_2d = np.zeros((2,))
-        explained_variance = np.array([0.0, 0.0])
-    else:
-        try:
-            pca = PCA(n_components=2)
-            hidden_2d = pca.fit_transform(hidden_states)
-            greedy_2d = pca.transform(greedy_hidden.numpy().reshape(1, -1))[0]
-            explained_variance = pca.explained_variance_ratio_
-        except Exception as e:
-            log.error(f"PCA failed: {e}")
+    # Check for variance and handle potential overflow
+    if len(hidden_states) > 1:
+        # Check for NaN or Inf values
+        if np.any(np.isnan(hidden_states)) or np.any(np.isinf(hidden_states)):
+            log.warning("Hidden states contain NaN or Inf values. Replacing with zeros.")
+            hidden_states = np.nan_to_num(hidden_states, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        # Check variance
+        variance = np.var(hidden_states)
+        if variance < 1e-9:
+            log.warning("Hidden states have near-zero variance. All samples likely identical.")
             hidden_2d = np.zeros((len(hidden_states), 2))
             greedy_2d = np.zeros((2,))
             explained_variance = np.array([0.0, 0.0])
+        else:
+            try:
+                # Normalize to prevent overflow (optional, but helps with numerical stability)
+                hidden_states_mean = np.mean(hidden_states, axis=0)
+                hidden_states_centered = hidden_states - hidden_states_mean
+                
+                pca = PCA(n_components=2)
+                hidden_2d = pca.fit_transform(hidden_states_centered)
+                
+                # Transform greedy hidden state
+                greedy_hidden_np = greedy_hidden.numpy().reshape(1, -1)
+                greedy_centered = greedy_hidden_np - hidden_states_mean
+                greedy_2d = pca.transform(greedy_centered)[0]
+                
+                explained_variance = pca.explained_variance_ratio_
+            except Exception as e:
+                log.error(f"PCA failed: {e}")
+                hidden_2d = np.zeros((len(hidden_states), 2))
+                greedy_2d = np.zeros((2,))
+                explained_variance = np.array([0.0, 0.0])
+    else:
+        log.warning("Not enough samples for PCA (need at least 2)")
+        hidden_2d = np.zeros((len(hidden_states), 2))
+        greedy_2d = np.zeros((2,))
+        explained_variance = np.array([0.0, 0.0])
 
     results = {
         'hidden_2d': hidden_2d,

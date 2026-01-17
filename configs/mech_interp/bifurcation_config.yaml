@@ -12,7 +12,8 @@ data_source:
 
 # Analysis parameters
 analysis:
-  n_samples: 20  # Total solutions to generate
+  problem_id: 24  # Problem ID to analyze (0-499 for MATH-500)
+  n_samples: 100  # Total solutions to generate
   token_position: 16  # Which token to extract hidden state
   layer_idx: 10  # Which layer to analyze
   temperature: 0.6  # Sampling temperature
