@@ -36,6 +36,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from src.data.prompts import MATH_PROMPT
 from src.evaluation.math_grader import grade_math
+from src.models.api_model import APIModel
 from omegaconf import DictConfig
 
 logging.basicConfig(level=logging.INFO)
@@ -77,6 +78,22 @@ class ClusteringExperiment:
         self.min_cluster_size = hdbscan_config.get('min_cluster_size', 2)
         self.min_samples = hdbscan_config.get('min_samples', 1)
         
+        # Initialize API model for continuation generation (OpenRouter)
+        api_config = self.config.get('api', {})
+        if not api_config:
+            raise ValueError("API configuration required for continuation generation")
+        
+        api_model_cfg = DictConfig({
+            'type': 'api',
+            'provider': 'openrouter',
+            'model_name': api_config.get('model_name', 'qwen/qwen3-8b'),
+            'base_url': api_config.get('base_url', 'https://openrouter.ai/api/v1'),
+            'api_key_env': api_config.get('api_key_env', 'OPENROUTER_API_KEY')
+        })
+        
+        log.info(f"Initializing API model for continuation: {api_model_cfg.model_name}")
+        self.api_model = APIModel(api_model_cfg)
+        
         log.info(f"Extraction layer: {self.extraction_layer}")
         log.info(f"k values: {self.k_values}")
         log.info(f"l values: {self.l_values}")
@@ -87,9 +104,20 @@ class ClusteringExperiment:
         
         def hook_fn(module, input, output):
             nonlocal activation
-            hidden = output[0]  # [batch, seq, hidden]
-            if position < hidden.shape[1]:
-                activation = hidden[0, position, :].detach().cpu()
+            # Handle both tuple and tensor outputs
+            hidden = output[0] if isinstance(output, tuple) else output
+            
+            # Check dimensions to handle both 2D and 3D tensors
+            if len(hidden.shape) == 3:
+                # [batch, seq, hidden]
+                if position < hidden.shape[1]:
+                    activation = hidden[0, position, :].detach().cpu()
+            elif len(hidden.shape) == 2:
+                # [seq, hidden] - batch dimension squeezed
+                if position < hidden.shape[0]:
+                    activation = hidden[position, :].detach().cpu()
+            else:
+                log.warning(f"Unexpected hidden state shape: {hidden.shape}")
         
         # Register hook on specified layer
         layer = self.model.model.layers[self.extraction_layer]
@@ -123,32 +151,16 @@ class ClusteringExperiment:
         
         return current_ids
 
-    def continue_generation(self, input_ids, max_tokens):
-        """Continue generation from given input_ids."""
-        current_ids = input_ids.clone()
-        generated_tokens = []
-        
-        for _ in range(max_tokens):
-            with torch.no_grad():
-                outputs = self.model(current_ids)
-                logits = outputs.logits[:, -1, :]
-                
-                # Apply temperature
-                logits = logits / self.temperature
-                
-                # Sample next token
-                probs = torch.softmax(logits, dim=-1)
-                next_token = torch.multinomial(probs, num_samples=1)
-                
-                token_id = next_token.item()
-                generated_tokens.append(token_id)
-                current_ids = torch.cat([current_ids, next_token], dim=1)
-                
-                # Stop if EOS
-                if token_id == self.tokenizer.eos_token_id:
-                    break
-        
-        return self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+    def continue_generation_with_api(self, base_prompt, prefix_text, max_tokens):
+        """Continue generation from prefix using OpenRouter API."""
+        continuation = self.api_model.generate(
+            base_prompt,
+            temperature=self.temperature,
+            max_new_tokens=max_tokens,
+            top_p=self.top_p,
+            prefix=prefix_text  # Pass prefix as prefill
+        )
+        return continuation
 
     def process_problem(self, item, k, l):
         """Process a single problem with clustering."""
@@ -163,21 +175,26 @@ class ClusteringExperiment:
 
             # Tokenize prompt
             prompt_ids = self.tokenizer.encode(base_prompt, return_tensors="pt").to(self.model.device)
+            prompt_len = prompt_ids.shape[1]
             
-            # Step 1: Generate k prefixes of length l
-            prefixes = []
+            # Step 1: Generate k prefixes of length l and extract activations
+            # Store prefix_ids temporarily, but we'll only keep representatives after clustering
             activations = []
+            all_prefix_ids = []  # Temporary storage during generation
             
             for i in range(k):
                 prefix_ids = self.generate_prefix(prompt_ids, l)
-                prefixes.append(prefix_ids)
+                all_prefix_ids.append(prefix_ids)
                 
                 # Extract activation at position l (after generating l tokens)
                 # prefix_ids has shape [1, prompt_len + l]
                 # We want activation at the last position (after l tokens generated)
-                activation = self.get_layer_activation(prefix_ids, prefix_ids.shape[1] - 1)
+                extract_position = prefix_ids.shape[1] - 1
+                activation = self.get_layer_activation(prefix_ids, extract_position)
                 if activation is not None:
                     activations.append(activation)
+                else:
+                    log.warning(f"Failed to extract activation at position {extract_position} for prefix {i}")
             
             if len(activations) < k:
                 return {'id': item['id'], 'k': k, 'l': l, 'error': f'Only got {len(activations)}/{k} activations'}
@@ -209,21 +226,66 @@ class ClusteringExperiment:
                 if len(noise_indices) > 0:
                     cluster_representatives.append(noise_indices[0])
             
-            # Step 4: Continue generation from each representative
+            # Step 4: Keep only representative prefix_ids and decode to text
+            # Extract representative prefixes and move to CPU immediately to free GPU memory
+            prefix_texts = []
+            for rep_idx in cluster_representatives:
+                prefix_ids = all_prefix_ids[rep_idx]
+                # Move to CPU and extract only the generated tokens (not the prompt)
+                # prefix_ids contains [prompt + l generated tokens]
+                # We want only the generated l tokens as prefix
+                generated_prefix_ids = prefix_ids[0, prompt_len:].cpu().tolist()
+                prefix_text = self.tokenizer.decode(generated_prefix_ids, skip_special_tokens=True)
+                prefix_texts.append((rep_idx, prefix_text))
+            
+            # Clear all prefixes and activations from memory (representatives already decoded)
+            del all_prefix_ids, activations, activations_stack
+            torch.cuda.empty_cache() if torch.cuda.is_available() else None
+            
+            # Generate continuations in parallel using multithreading
+            def generate_continuation(rep_idx, prefix_text):
+                """Generate continuation for a single representative."""
+                try:
+                    continuation = self.continue_generation_with_api(
+                        base_prompt, 
+                        prefix_text, 
+                        self.max_new_tokens
+                    )
+                    # Reconstruct full output: prompt + prefix + continuation
+                    # The API returns only the continuation (after prefix), so we combine them
+                    full_output = base_prompt + prefix_text + continuation
+                    is_correct = grade_math(full_output, item['gold'])
+                    return {
+                        'rep_idx': rep_idx,
+                        'prefix_text': prefix_text,
+                        'continuation': continuation,
+                        'full_output': full_output,
+                        'is_correct': is_correct
+                    }
+                except Exception as e:
+                    log.error(f"Error generating continuation for rep {rep_idx}: {e}")
+                    return {
+                        'rep_idx': rep_idx,
+                        'error': str(e),
+                        'is_correct': False
+                    }
+            
+            # Use ThreadPoolExecutor for parallel API calls
             all_outputs = []
             all_correct = []
-            
-            for rep_idx in cluster_representatives:
-                prefix_ids = prefixes[rep_idx]
-                continuation = self.continue_generation(prefix_ids, self.max_new_tokens)
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {
+                    executor.submit(generate_continuation, rep_idx, prefix_text): rep_idx
+                    for rep_idx, prefix_text in prefix_texts
+                }
                 
-                # Decode full output
-                full_output_ids = prefix_ids[0].cpu().tolist()
-                full_output = self.tokenizer.decode(full_output_ids, skip_special_tokens=True) + continuation
-                
-                is_correct = grade_math(full_output, item['gold'])
-                all_outputs.append(full_output)
-                all_correct.append(is_correct)
+                for future in as_completed(futures):
+                    result = future.result()
+                    if 'error' not in result:
+                        all_outputs.append(result['full_output'])
+                        all_correct.append(result['is_correct'])
+                    else:
+                        all_correct.append(False)
             
             # Best result is if any continuation is correct
             best_correct = any(all_correct) if all_correct else False

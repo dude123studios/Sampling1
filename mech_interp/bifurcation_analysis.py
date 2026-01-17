@@ -16,6 +16,9 @@ import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from src.evaluation.math_grader import grade_math
+from src.models.api_model import APIModel
+from omegaconf import DictConfig
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -47,22 +50,22 @@ def load_problem_directly(problem_id: int = 24):
 def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, layer_idx: int, device: str):
     """Extract hidden state at specific position and layer. Keep on GPU for efficiency."""
     try:
-    inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
-    input_ids = inputs['input_ids']
+        inputs = tokenizer(prefix_text, return_tensors="pt").to(device)
+        input_ids = inputs['input_ids']
 
-    seq_len = input_ids.shape[1]
+        seq_len = input_ids.shape[1]
         actual_pos = min(token_pos, seq_len - 1)  # Ensure valid position
 
-    hidden_state = None
+        hidden_state = None
 
-    def hook_fn(module, input, output):
-        nonlocal hidden_state
+        def hook_fn(module, input, output):
+            nonlocal hidden_state
             try:
-        hidden = output[0] if isinstance(output, tuple) else output
+                hidden = output[0] if isinstance(output, tuple) else output
                 # Extract on GPU, only move to CPU at the end
-        if hidden.shape[1] > actual_pos:
+                if hidden.shape[1] > actual_pos:
                     hidden_state = hidden[0, actual_pos, :].detach()  # Keep on GPU
-        else:
+                else:
                     hidden_state = hidden[0, -1, :].detach()  # Keep on GPU
                 
                 # Check for NaN/Inf and fix immediately (prevent propagation)
@@ -76,12 +79,12 @@ def extract_hidden_state(model, tokenizer, prefix_text: str, token_pos: int, lay
                 log.error(f"Error in hook: {e}")
                 hidden_state = None
 
-    hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
+        hook = model.model.layers[layer_idx].register_forward_hook(hook_fn)
 
-    with torch.no_grad():
-        _ = model(input_ids)
+        with torch.no_grad():
+            _ = model(input_ids)
 
-    hook.remove()
+        hook.remove()
         
         if hidden_state is None:
             log.error(f"Failed to extract hidden state, returning zeros")
@@ -139,41 +142,86 @@ Solution:
     max_new_tokens = cfg['analysis'].get('max_new_tokens', 4096)
     temp = cfg['analysis'].get('temperature', 0.6)  # Get temperature for results
     
-    # Generate samples if none exist - use HuggingFace generate() (it works fine!)
+    # Setup output directory early to check for existing solutions
+    output_dir = Path(cfg['output_dir'])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    model_name = cfg['model']['name']
+    
+    # Check if solutions already exist for this problem/model
+    solutions_file = output_dir / f"{model_name}_problem_{problem_id}_solutions.json"
+    
+    if solutions_file.exists():
+        log.info(f"Loading existing solutions from {solutions_file}")
+        try:
+            with open(solutions_file, 'r') as f:
+                saved_data = json.load(f)
+                if 'solutions' in saved_data and len(saved_data['solutions']) > 0:
+                    outputs = saved_data['solutions']
+                    labels = saved_data.get('labels', [])
+                    log.info(f"Loaded {len(outputs)} existing solutions")
+                    if len(labels) != len(outputs):
+                        # Regrade if labels don't match
+                        log.info("Regrading solutions...")
+                        labels = []
+                        for sol in outputs:
+                            is_correct = grade_math(sol, problem['answer'])
+                            labels.append(1 if is_correct else 0)
+                else:
+                    log.info("No solutions found in saved file, will generate new ones")
+                    outputs = []
+        except Exception as e:
+            log.warning(f"Error loading solutions file: {e}. Will generate new ones.")
+            outputs = []
+    
+    # Generate samples if none exist - use OpenRouter API with multithreading
     if not outputs:
         n_samples = cfg['analysis'].get('n_samples', 20)
-        log.info(f"Generating {n_samples} samples for Problem {problem_id} (temp={temp}, max_tokens={max_new_tokens})...")
+        log.info(f"Generating {n_samples} samples for Problem {problem_id} using OpenRouter API (temp={temp}, max_tokens={max_new_tokens})...")
         
-        inputs = tokenizer(prompt, return_tensors="pt").to(device)
+        # Initialize API model for generation
+        api_config = cfg.get('api', {})
+        if not api_config:
+            raise ValueError("API configuration required. Add 'api' section to config with model_name, base_url, api_key_env")
         
-        # Use HuggingFace generate - suppress warnings about generation config
-        # Suppress the generation config warning - it's harmless
-        import warnings
-        import os
-        # Set environment variable to suppress the warning
-        os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
+        api_model_cfg = DictConfig({
+            'type': 'api',
+            'provider': 'openrouter',
+            'model_name': api_config.get('model_name', 'qwen/qwen3-8b'),
+            'base_url': api_config.get('base_url', 'https://openrouter.ai/api/v1'),
+            'api_key_env': api_config.get('api_key_env', 'OPENROUTER_API_KEY')
+        })
         
-        generated_solutions = []
-            with torch.no_grad():
-            for _ in tqdm(range(n_samples), desc="Generating"):
-                # Only pass sampling params when do_sample=True
-                gen_kwargs = {
-                    **inputs,
-                    "max_new_tokens": max_new_tokens,
-                    "do_sample": True,
-                    "temperature": temp,
-                    "top_p": 0.9,
-                    "top_k": 50,
-                    "pad_token_id": tokenizer.pad_token_id,
-                    "eos_token_id": tokenizer.eos_token_id
-                }
-                gen_output = model.generate(**gen_kwargs)
-                # Decode and extract solution (remove prompt)
-                full_text = tokenizer.decode(gen_output[0], skip_special_tokens=True)
-                sol = full_text[len(prompt):]
-                generated_solutions.append(sol)
-
-        outputs = generated_solutions
+        api_model = APIModel(api_model_cfg)
+        max_workers = api_config.get('max_workers', 15)
+        log.info(f"Using {max_workers} threads for generation")
+        
+        # Generate solutions in parallel
+        def generate_one_solution(idx):
+            try:
+                solution = api_model.generate(
+                    prompt,
+                    temperature=temp,
+                    max_new_tokens=max_new_tokens,
+                    top_p=0.9,
+                    top_k=50
+                )
+                return idx, solution, None
+            except Exception as e:
+                log.error(f"Error generating solution {idx}: {e}")
+                return idx, None, str(e)
+        
+        generated_solutions = [None] * n_samples
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(generate_one_solution, i): i for i in range(n_samples)}
+            for future in tqdm(as_completed(futures), total=n_samples, desc="Generating"):
+                idx, sol, error = future.result()
+                if error:
+                    log.warning(f"Solution {idx} failed: {error}")
+                    generated_solutions[idx] = ""  # Empty string on error
+                else:
+                    generated_solutions[idx] = sol
+        
+        outputs = [s for s in generated_solutions if s]  # Filter out None/empty
         
         # Verify diversity
         unique_solutions = set(outputs)
@@ -184,65 +232,67 @@ Solution:
         for sol in outputs:
             is_correct = grade_math(sol, problem['answer'])
             labels.append(1 if is_correct else 0)
+        
+        # Save solutions for future use
+        log.info(f"Saving {len(outputs)} solutions to {solutions_file}")
+        try:
+            with open(solutions_file, 'w') as f:
+                json.dump({
+                    'problem_id': problem_id,
+                    'model_name': model_name,
+                    'temperature': temp,
+                    'n_samples': len(outputs),
+                    'solutions': outputs,
+                    'labels': labels
+                }, f, indent=2)
+            log.info(f"Solutions saved successfully")
+        except Exception as e:
+            log.warning(f"Failed to save solutions: {e}")
             
     else:
         # Should not happen with new logic, but kept for safety
-        labels = [1 if c else 0 for c in problem['correctness']]
+        if len(labels) == 0:
+            labels = [1 if c else 0 for c in problem['correctness']]
 
     log.info(f"Solutions: {len(outputs)}, Success rate: {sum(labels)/len(labels):.2%}")
 
-    log.info(f"Extracting hidden states from {len(outputs)} solutions...")
+    log.info(f"Extracting hidden states from {len(outputs)} solutions using local HuggingFace model...")
     token_pos = cfg['analysis']['token_position']
     layer_idx = cfg['analysis']['layer_idx']
 
     # Pre-tokenize prompt once
-    prompt_tokens = tokenizer.encode(prompt, add_special_tokens=False)
-    prompt_len = len(prompt_tokens)
-    
-    # Extract hidden states at token_position (only first token_pos tokens, not full solution)
-    # We only need the prefix up to token_pos for PCA
-    hidden_states = []
-    
-    # Pre-tokenize prompt to get its length
     prompt_token_ids = tokenizer.encode(prompt, add_special_tokens=False)
     prompt_len = len(prompt_token_ids)
+    
+    log.info(f"Prompt length: {prompt_len} tokens, extracting at position {token_pos} (after {token_pos} total tokens)")
+    
+    # Extract hidden states at token_position (exactly after token_pos tokens)
+    hidden_states = []
     
     with torch.no_grad():
         for i, solution in enumerate(tqdm(outputs, desc="Extracting hidden states")):
             try:
-                # CRITICAL: We need to include solution tokens to get variance!
-                # token_pos is the position in the FULL sequence (prompt + solution) where we extract
+                # CRITICAL: Extract at exactly position token_pos (after token_pos tokens total)
+                # token_pos = 16 means we want the hidden state AFTER 16 tokens (prompt + solution)
                 solution_tokens = tokenizer.encode(solution, add_special_tokens=False)
                 
                 # Build full sequence: prompt + solution
                 full_tokens = prompt_token_ids + solution_tokens
                 
-                # CRITICAL FIX: If prompt is longer than token_pos, we're extracting from prompt (all identical!)
-                # We MUST extract from solution tokens to get variance between samples
-                if prompt_len >= token_pos:
-                    # Prompt is too long - we need to extract from solution tokens
-                    # Extract at position: prompt_len + a few tokens into solution (to ensure variance)
-                    # Use at least 1 token into solution, but prefer a few more
-                    solution_offset = max(1, min(5, len(solution_tokens)))
-                    extract_pos = prompt_len + solution_offset - 1  # -1 because we want the token at this position
-                    # But ensure we don't go beyond available tokens
-                    extract_pos = min(extract_pos, len(full_tokens) - 1)
-                    # We need at least extract_pos+1 tokens to extract at that position
-                    prefix_tokens = full_tokens[:extract_pos + 1]
-                    if i == 0:  # Log once
-                        log.info(f"Prompt length ({prompt_len}) >= token_pos ({token_pos}). Extracting at position {extract_pos} (in solution) to ensure variance.")
-                elif len(full_tokens) < token_pos:
-                    # Not enough tokens total - use what we have
+                # We need exactly token_pos tokens to extract at position token_pos-1 (0-indexed)
+                # Position token_pos-1 is the token_pos-th token (after token_pos tokens processed)
+                if len(full_tokens) < token_pos:
+                    # Not enough tokens - use what we have
                     prefix_tokens = full_tokens
-                    extract_pos = len(full_tokens) - 1  # Last token
+                    extract_pos = len(full_tokens) - 1  # Last available token
                     if i == 0:
-                        log.warning(f"Sample {i}: Only {len(full_tokens)} tokens, need {token_pos}. Using all tokens.")
-        else:
-                    # Normal case: prompt is shorter than token_pos, so we include solution tokens
+                        log.warning(f"Sample {i}: Only {len(full_tokens)} tokens, need {token_pos}. Using position {extract_pos}.")
+                else:
+                    # Use exactly token_pos tokens (prompt + solution tokens up to token_pos)
                     prefix_tokens = full_tokens[:token_pos]
-                    extract_pos = token_pos - 1  # Extract at the token_pos-th token (0-indexed)
+                    extract_pos = token_pos - 1  # Extract at position token_pos-1 (the token_pos-th token, 0-indexed)
                     if i == 0:
-                        log.info(f"Extracting at position {extract_pos} (prompt_len={prompt_len}, token_pos={token_pos})")
+                        log.info(f"Extracting at position {extract_pos} (after {token_pos} tokens: {prompt_len} prompt + {token_pos - prompt_len} solution)")
                 
                 # Convert to tensor
                 prefix_tensor = torch.tensor([prefix_tokens], device=device)
@@ -301,14 +351,17 @@ Solution:
     greedy_correct = grade_math(greedy_solution, problem['answer'])
 
     # Extract greedy hidden state at token_pos - same logic as other solutions
+    # Extract at exactly position token_pos (after token_pos tokens)
     greedy_token_ids = tokenizer.encode(greedy_text, add_special_tokens=False)
     
     if len(greedy_token_ids) < token_pos:
         greedy_prefix_ids = greedy_token_ids
         greedy_extract_pos = len(greedy_token_ids) - 1
+        log.warning(f"Greedy: Only {len(greedy_token_ids)} tokens, need {token_pos}. Using position {greedy_extract_pos}.")
     else:
         greedy_prefix_ids = greedy_token_ids[:token_pos]
-        greedy_extract_pos = token_pos - 1
+        greedy_extract_pos = token_pos - 1  # Extract at position token_pos-1 (the token_pos-th token)
+        log.info(f"Greedy: Extracting at position {greedy_extract_pos} (after {token_pos} tokens)")
     
     greedy_prefix_tensor = torch.tensor([greedy_prefix_ids], device=device)
     
@@ -375,8 +428,9 @@ Solution:
                     raise ValueError("All hidden states are identical - extraction position is wrong")
             
             # Remove features with zero variance (they don't contribute to PCA)
+            # Use very sensitive threshold to catch even small variances
             feature_vars = np.var(hidden_states_f64, axis=0)
-            valid_features = feature_vars > 1e-12  # Very lenient threshold
+            valid_features = feature_vars > 1e-15  # Very sensitive threshold
             
             n_valid = np.sum(valid_features)
             log.info(f"Features with variance: {n_valid}/{len(feature_vars)}")
@@ -479,11 +533,7 @@ Solution:
         'n_samples': len(outputs)
     }
 
-    # Save and plot
-    output_dir = Path(cfg['output_dir'])
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    model_name = cfg['model']['name']
+    # Save and plot (output_dir and model_name already set above)
 
     # Save results with proper error handling
     try:
@@ -513,7 +563,7 @@ Solution:
             else:
                 results_to_save[k] = v
         
-    with open(output_dir / f"{model_name}_results.json", 'w') as f:
+        with open(output_dir / f"{model_name}_results.json", 'w') as f:
             json.dump(results_to_save, f, indent=2)
         log.info(f"Saved results to {output_dir / f'{model_name}_results.json'}")
     except Exception as e:

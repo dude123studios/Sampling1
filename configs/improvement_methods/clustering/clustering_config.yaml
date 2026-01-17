@@ -42,3 +42,9 @@ task:
 
 # Output directory
 output_dir: "results/improvement_methods/clustering"
+
+# API configuration for continuation generation (OpenRouter)
+api:
+  model_name: "qwen/qwen3-8b"  # Model to use for continuation generation
+  base_url: "https://openrouter.ai/api/v1"
+  api_key_env: "OPENROUTER_API_KEY"
