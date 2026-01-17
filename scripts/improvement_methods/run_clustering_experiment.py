@@ -83,15 +83,28 @@ class ClusteringExperiment:
         if not api_config:
             raise ValueError("API configuration required for continuation generation")
         
+        # Get API key environment variable name from config
+        api_key_env = api_config.get('api_key_env', 'OPENROUTER_API_KEY')
+        
+        # Verify API key is available in environment
+        api_key = os.getenv(api_key_env)
+        if not api_key:
+            raise ValueError(
+                f"API Key not found in environment variable: {api_key_env}. "
+                f"Please set {api_key_env} environment variable with your OpenRouter API key."
+            )
+        log.info(f"API key found in environment variable: {api_key_env}")
+        
         api_model_cfg = DictConfig({
             'type': 'api',
             'provider': 'openrouter',
             'model_name': api_config.get('model_name', 'qwen/qwen3-8b'),
             'base_url': api_config.get('base_url', 'https://openrouter.ai/api/v1'),
-            'api_key_env': api_config.get('api_key_env', 'OPENROUTER_API_KEY')
+            'api_key_env': api_key_env
         })
         
         log.info(f"Initializing API model for continuation: {api_model_cfg.model_name}")
+        log.info(f"Using API base URL: {api_model_cfg.base_url}")
         self.api_model = APIModel(api_model_cfg)
         
         log.info(f"Extraction layer: {self.extraction_layer}")
