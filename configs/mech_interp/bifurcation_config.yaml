@@ -12,8 +12,10 @@ data_source:
 
 # Analysis parameters
 analysis:
+  n_samples: 20  # Total solutions to generate
   token_position: 16  # Which token to extract hidden state
   layer_idx: 10  # Which layer to analyze
+  temperature: 0.6  # Sampling temperature
 
 # Output
 output_dir: "mech_interp/bifurcation_results"

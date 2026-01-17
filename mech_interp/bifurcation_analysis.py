@@ -85,7 +85,7 @@ def run_bifurcation_analysis(config_path: str):
     device = cfg['model']['device']
     model = AutoModelForCausalLM.from_pretrained(
         cfg['model']['model_id'],
-        torch_dtype=torch.float16,
+        dtype=torch.float16,
         device_map=device
     )
     model.eval()
@@ -116,7 +116,8 @@ Solution:
     # Generate samples if none exist
     if not outputs:
         n_samples = cfg['analysis'].get('n_samples', 20)
-        log.info(f"Generating {n_samples} samples for Problem 24...")
+        temp = cfg['analysis'].get('temperature', 0.6)
+        log.info(f"Generating {n_samples} samples for Problem 24 (temp={temp})...")
         
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
         
@@ -126,11 +127,13 @@ Solution:
         for _ in tqdm(range(0, n_samples, batch_size), desc="Generating"):
             curr_batch = min(batch_size, n_samples - len(generated_solutions))
             with torch.no_grad():
+                # Explicitly pass generation config args
                 gen_out = model.generate(
                     **inputs,
                     max_new_tokens=1024,
                     do_sample=True,
-                    temperature=cfg['analysis'].get('temperature', 0.6),
+                    temperature=temp,
+                    top_p=0.9, # Ensure diversity
                     num_return_sequences=curr_batch,
                     pad_token_id=tokenizer.pad_token_id
                 )
@@ -143,6 +146,10 @@ Solution:
                 generated_solutions.append(sol)
 
         outputs = generated_solutions
+        
+        # Verify diversity
+        unique_solutions = set(outputs)
+        log.info(f"Generated {len(outputs)} samples, {len(unique_solutions)} unique.")
         
         # Grade them
         log.info("Grading generated solutions...")
@@ -199,16 +206,31 @@ Solution:
 
     log.info(f"Success: {labels.sum()}/{len(labels)}, Greedy: {'CORRECT' if greedy_correct else 'INCORRECT'}")
 
-    pca = PCA(n_components=2)
-    hidden_2d = pca.fit_transform(hidden_states)
-    greedy_2d = pca.transform(greedy_hidden.numpy().reshape(1, -1))[0]
+    # Check for variance
+    if len(hidden_states) > 1 and np.var(hidden_states) < 1e-9:
+        log.warning("Hidden states have near-zero variance. All samples likely identical.")
+        # Create a dummy 2D projection
+        hidden_2d = np.zeros((len(hidden_states), 2))
+        greedy_2d = np.zeros((2,))
+        explained_variance = np.array([0.0, 0.0])
+    else:
+        try:
+            pca = PCA(n_components=2)
+            hidden_2d = pca.fit_transform(hidden_states)
+            greedy_2d = pca.transform(greedy_hidden.numpy().reshape(1, -1))[0]
+            explained_variance = pca.explained_variance_ratio_
+        except Exception as e:
+            log.error(f"PCA failed: {e}")
+            hidden_2d = np.zeros((len(hidden_states), 2))
+            greedy_2d = np.zeros((2,))
+            explained_variance = np.array([0.0, 0.0])
 
     results = {
         'hidden_2d': hidden_2d,
         'labels': labels,
         'greedy_2d': greedy_2d,
         'greedy_correct': greedy_correct,
-        'explained_variance': pca.explained_variance_ratio_,
+        'explained_variance': explained_variance,
         'n_success': int(labels.sum()),
         'n_fail': int(len(labels) - labels.sum()),
         'problem_id': problem['problem_id'],
