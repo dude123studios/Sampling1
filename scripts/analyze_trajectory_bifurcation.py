@@ -115,7 +115,7 @@ Solution:
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=2048,
+                max_new_tokens=4096,  # Updated to 4096 for math problems
                 temperature=temperature,
                 top_k=50,
                 top_p=0.9,

@@ -114,11 +114,14 @@ Solution:
     outputs = problem['outputs']
     labels = []
 
+    # Get generation parameters (used for both temperature sampling and greedy)
+    max_new_tokens = cfg['analysis'].get('max_new_tokens', 4096)
+    
     # Generate samples if none exist
     if not outputs:
         n_samples = cfg['analysis'].get('n_samples', 20)
         temp = cfg['analysis'].get('temperature', 0.6)
-        log.info(f"Generating {n_samples} samples for Problem {problem_id} (temp={temp})...")
+        log.info(f"Generating {n_samples} samples for Problem {problem_id} (temp={temp}, max_tokens={max_new_tokens})...")
         log.info(f"Temperature sampling enabled: do_sample=True, temperature={temp}")
         
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
@@ -132,7 +135,7 @@ Solution:
                 # CRITICAL: do_sample=True is required for temperature to have any effect
                 gen_out = model.generate(
                     **inputs,
-                    max_new_tokens=1024,
+                    max_new_tokens=max_new_tokens,
                     do_sample=True,  # Required for temperature sampling
                     temperature=temp,  # Temperature from config (0.6 default)
                     top_p=0.9,
@@ -189,7 +192,7 @@ Solution:
     with torch.no_grad():
         greedy_output = model.generate(
             **inputs, 
-            max_new_tokens=2048, 
+            max_new_tokens=max_new_tokens, 
             do_sample=False,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id

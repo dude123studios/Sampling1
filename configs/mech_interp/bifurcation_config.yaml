@@ -17,6 +17,7 @@ analysis:
   token_position: 16  # Which token to extract hidden state
   layer_idx: 10  # Which layer to analyze
   temperature: 0.6  # Sampling temperature
+  max_new_tokens: 4096  # Maximum tokens to generate per solution
 
 # Output
 output_dir: "mech_interp/bifurcation_results"
