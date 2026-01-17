@@ -79,8 +79,6 @@ def remove_boxed(s: str) -> str:
 
 # Substitutions for normalization
 SUBSTITUTIONS = [
-    ("an ", ""),
-    ("a ", ""),
     (".$", "$"),
     ("\\$", ""),
     (r"\ ", ""),
@@ -162,10 +160,10 @@ def normalize_final_answer(final_answer: str) -> str:
 
     # Extract answer that is in LaTeX math, is bold, is surrounded by a box, etc.
     final_answer = re.sub(r"(.*?)(\\$)(.*?)(\\$)(.*)", r"$\3$", final_answer)
-    final_answer = re.sub(r"(\\text\\{)(.*?)(\\})", r"\2", final_answer)
-    final_answer = re.sub(r"(\\textbf\\{)(.*?)(\\})", r"\2", final_answer)
-    final_answer = re.sub(r"(\\overline\\{)(.*?)(\\})", r"\2", final_answer)
-    final_answer = re.sub(r"(\\boxed\\{)(.*)(\\})", r"\2", final_answer)
+    final_answer = re.sub(r"(\\text\{)(.*?)(\})", r"\2", final_answer)
+    final_answer = re.sub(r"(\\textbf\{)(.*?)(\})", r"\2", final_answer)
+    final_answer = re.sub(r"(\\overline\{)(.*?)(\})", r"\2", final_answer)
+    final_answer = re.sub(r"(\\boxed\{)(.*)(\})", r"\2", final_answer)
 
     # Normalize shorthand TeX:
     # \fracab -> \frac{a}{b}
@@ -275,7 +273,17 @@ def grade_math(prediction: str, reference: str) -> bool:
 
     # Check equivalence
     if SYMPY_AVAILABLE:
-        return is_equiv(norm_pred, norm_ref)
-    else:
-        # Simple string comparison fallback
-        return norm_pred.strip() == norm_ref.strip()
+        if is_equiv(norm_pred, norm_ref):
+            return True
+    
+    # Simple string comparison fallback
+    if norm_pred.strip() == norm_ref.strip():
+        return True
+        
+    # Case-insensitive fallback for text answers
+    # We only applying this if length > 1 to avoid conflating variables like 'A' and 'a'.
+    # This handles answers like "East" vs "east" or "True" vs "true".
+    if len(norm_ref.strip()) > 1 and norm_pred.strip().lower() == norm_ref.strip().lower():
+        return True
+        
+    return False

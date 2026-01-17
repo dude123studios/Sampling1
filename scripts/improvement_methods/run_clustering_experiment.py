@@ -119,36 +119,36 @@ class ClusteringExperiment:
 
     def get_layer_activation(self, input_ids, position):
         """Get activation from specified layer at given position."""
-        activation = None
-        
-        def hook_fn(module, input, output):
-            nonlocal activation
-            # Handle both tuple and tensor outputs
-            hidden = output[0] if isinstance(output, tuple) else output
-            
-            # Check dimensions to handle both 2D and 3D tensors
-            if len(hidden.shape) == 3:
-                # [batch, seq, hidden]
-                if position < hidden.shape[1]:
-                    activation = hidden[0, position, :].detach().cpu()
-            elif len(hidden.shape) == 2:
-                # [seq, hidden] - batch dimension squeezed
-                if position < hidden.shape[0]:
-                    activation = hidden[position, :].detach().cpu()
-            else:
-                log.warning(f"Unexpected hidden state shape: {hidden.shape}")
-        
-        # Register hook on specified layer
-        layer = self.model.model.layers[self.extraction_layer]
-        hook = layer.register_forward_hook(hook_fn)
-        
         try:
+            # Try a simpler approach: run the model and get hidden states directly
             with torch.no_grad():
-                _ = self.model(input_ids)
-        finally:
-            hook.remove()
-        
-        return activation
+                outputs = self.model(input_ids, output_hidden_states=True)
+
+            # Get hidden states from the specified layer
+            hidden_states = outputs.hidden_states[self.extraction_layer]
+
+            # Handle different tensor shapes
+            if len(hidden_states.shape) == 3:
+                # [batch, seq, hidden]
+                if position < hidden_states.shape[1]:
+                    activation = hidden_states[0, position, :].detach().cpu()
+                    return activation
+                else:
+                    log.warning(f"Position {position} >= sequence length {hidden_states.shape[1]}")
+            elif len(hidden_states.shape) == 2:
+                # [seq, hidden] - batch dimension squeezed
+                if position < hidden_states.shape[0]:
+                    activation = hidden_states[position, :].detach().cpu()
+                    return activation
+                else:
+                    log.warning(f"Position {position} >= sequence length {hidden_states.shape[0]}")
+            else:
+                log.warning(f"Unexpected hidden state shape: {hidden_states.shape}")
+
+        except Exception as e:
+            log.error(f"Error extracting activation: {e}")
+
+        return None
 
     def generate_prefix(self, prompt_ids, prefix_length):
         """Generate a prefix of specified length."""
@@ -199,7 +199,9 @@ class ClusteringExperiment:
             # Step 1: Generate k prefixes of length l and extract activations
             # We need to generate at least extraction_position tokens to reach the extraction point
             actual_generation_length = max(l, self.extraction_position)
-            extraction_pos = prompt_len + self.extraction_position
+            extraction_pos = prompt_len + self.extraction_position - 1  # 0-indexed position
+
+            log.info(f"Problem {item['id']}: prompt_len={prompt_len}, extraction_position={self.extraction_position}, extraction_pos={extraction_pos}, actual_generation_length={actual_generation_length}")
 
             # Store prefix_ids temporarily, but we'll only keep representatives after clustering
             activations = []
@@ -210,7 +212,7 @@ class ClusteringExperiment:
                 all_prefix_ids.append(prefix_ids)
 
                 # Extract activation at the specified position after prompt
-                # extraction_pos = prompt_len + extraction_position
+                # extraction_pos = prompt_len + extraction_position - 1 (0-indexed)
                 activation = self.get_layer_activation(prefix_ids, extraction_pos)
                 if activation is not None:
                     activations.append(activation)

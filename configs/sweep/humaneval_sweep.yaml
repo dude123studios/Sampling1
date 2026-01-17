@@ -21,7 +21,7 @@ parameters:
   num_samples: [25]  # Generate 25 responses per problem for pass@20
   top_k: [50]
   top_p: [0.9]
-  limit: [100]  # Use first 100 problems
+  limit: [null]
 
 task:
   name: "humaneval"
